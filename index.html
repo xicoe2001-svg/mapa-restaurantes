@@ -25,9 +25,9 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 #map{width:100%;height:100%}
 
 /* ── MAP BUTTONS ── */
-.map-btn{position:absolute;z-index:800;width:48px;height:48px;border-radius:var(--radius);border:none;background:var(--panel);color:var(--txt);font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,.5);cursor:pointer;transition:background .15s}
+.map-btn{position:absolute;z-index:900;width:52px;height:52px;border-radius:14px;border:none;background:var(--panel);color:var(--txt);font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.6);cursor:pointer;transition:background .15s}
 .map-btn:active{background:var(--card)}
-#locateBtn{bottom:90px;right:12px}
+#locateBtn{bottom:80px;right:14px}
 #locateBtn.loading{animation:pulse .8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -82,11 +82,11 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 .li-empty{padding:24px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}
 
 /* ── NEARBY SHEET ── */
-.nb-controls{padding:0 16px 12px}
-.nb-radius{text-align:center;font-size:18px;font-weight:700;color:var(--blue);margin-bottom:6px}
-.nb-range{width:100%;-webkit-appearance:none;height:6px;background:var(--input);border-radius:3px;outline:none}
-.nb-range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--blue);border:3px solid var(--panel);box-shadow:0 2px 8px rgba(0,0,0,.4)}
-.nb-range::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--blue);border:3px solid var(--panel)}
+.nb-controls{padding:12px 16px 16px;background:var(--card);border-radius:0 0 12px 12px;margin:0 12px 8px;border:1px solid var(--border)}
+.nb-radius{text-align:center;font-size:20px;font-weight:700;color:var(--blue);margin-bottom:10px}
+.nb-range{width:100%;-webkit-appearance:none;height:8px;background:linear-gradient(to right,var(--blue) 0%,var(--input) 0%);border-radius:4px;outline:none;margin:4px 0}
+.nb-range::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:var(--blue);border:3px solid var(--panel);box-shadow:0 2px 10px rgba(66,133,244,.5)}
+.nb-range::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:var(--blue);border:3px solid var(--panel);box-shadow:0 2px 10px rgba(66,133,244,.5)}
 .nb-status{text-align:center;font-size:11px;color:var(--muted);margin-top:6px}
 .nb-dist{font-size:11px;font-weight:700;color:var(--blue);width:48px;text-align:center;flex-shrink:0}
 
@@ -150,7 +150,7 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
   .desk-filters .f-clear{width:100%;margin:0 0 14px}
   .desk-bottom{border-top:1px solid var(--border);max-height:300px;overflow-y:auto}
   .map-wrap{flex:1;position:relative}
-  #locateBtn{bottom:30px;right:12px}
+  #locateBtn{bottom:30px;right:14px}
   .sheet,.sheet-overlay{display:none!important}
 }
 @media(max-width:768px){
@@ -419,25 +419,37 @@ function haversine(a,b,c,d){var RR=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/18
 
 window.locateMe=function(){
   var btn=document.getElementById('locateBtn');btn.classList.add('loading');
-  if(!navigator.geolocation){btn.classList.remove('loading');document.getElementById('nbStatus').textContent='Geolocalización no disponible';return}
-  navigator.geolocation.getCurrentPosition(function(p){
+  var statusEl=document.getElementById('nbStatus');
+  if(!navigator.geolocation){btn.classList.remove('loading');statusEl.textContent='Geolocalización no disponible';return}
+  statusEl.textContent='Obteniendo ubicación...';
+  
+  // Try high accuracy first, fallback to low accuracy
+  function onSuccess(p){
     uLat=p.coords.latitude;uLng=p.coords.longitude;btn.classList.remove('loading');
     if(uMarker)map.removeLayer(uMarker);if(uCircle)map.removeLayer(uCircle);
     uMarker=L.marker([uLat,uLng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map);
     uCircle=L.circle([uLat,uLng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.06,weight:1.5,dashArray:'6 4'}).addTo(map);
     map.setView([uLat,uLng],12);
-    document.getElementById('nbStatus').textContent='Ubicación detectada ✓';
+    statusEl.textContent='Ubicación detectada ✓ (±'+Math.round(p.coords.accuracy)+'m)';
     updateNearby();
-    // On mobile, auto-open nearby sheet
     if(window.innerWidth<=768)openSheet('nearby');
-  },function(err){
+  }
+  function onError(err){
+    // If high accuracy failed, try without it
+    if(err.code===3){
+      navigator.geolocation.getCurrentPosition(onSuccess,function(err2){
+        btn.classList.remove('loading');
+        statusEl.textContent=err2.code===1?'Permiso denegado. Ve a Ajustes > Safari > Ubicación':'Error: '+err2.message;
+      },{enableHighAccuracy:false,timeout:20000,maximumAge:120000});
+      return;
+    }
     btn.classList.remove('loading');
     var msg='Error obteniendo ubicación';
-    if(err.code===1)msg='Permiso denegado. Actívalo en Ajustes > Safari > Ubicación';
+    if(err.code===1)msg='Permiso denegado. Ve a Ajustes > Safari > Ubicación';
     if(err.code===2)msg='Ubicación no disponible';
-    if(err.code===3)msg='Tiempo de espera agotado';
-    document.getElementById('nbStatus').textContent=msg;
-  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+    statusEl.textContent=msg;
+  }
+  navigator.geolocation.getCurrentPosition(onSuccess,onError,{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
 };
 
 function updateNearby(){
@@ -468,6 +480,9 @@ function updateNearby(){
 document.getElementById('nbRange').addEventListener('input',function(){
   nbRadius=parseInt(this.value);
   document.getElementById('nbRadiusDisplay').textContent='Radio: '+nbRadius+' km';
+  // Update track visual
+  var pct=((nbRadius-1)/49)*100;
+  this.style.background='linear-gradient(to right,#4285F4 '+pct+'%,#2a2a32 '+pct+'%)';
   updateNearby();
 });
 
@@ -510,6 +525,8 @@ updateRankings();
 
 // Fix Leaflet size on mobile after everything loads
 setTimeout(function(){map.invalidateSize()},100);
+// Set initial gradient on nearby range
+var nbr=document.getElementById('nbRange');if(nbr){var p=((10-1)/49)*100;nbr.style.background='linear-gradient(to right,#4285F4 '+p+'%,#2a2a32 '+p+'%)'}
 </script>
 </body>
 </html>
