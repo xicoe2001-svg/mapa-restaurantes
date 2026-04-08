@@ -783,6 +783,217 @@ select.filter-select option {
   }
 }
 
+/* Geolocation button */
+.locate-btn {
+  position: absolute;
+  bottom: 30px;
+  right: 12px;
+  z-index: 999;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  transition: all 0.2s;
+}
+
+.locate-btn:hover {
+  background: var(--accent-gold);
+  color: #111;
+}
+
+.locate-btn.loading {
+  animation: pulse-locate 1s infinite;
+}
+
+@keyframes pulse-locate {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Nearby section */
+.nearby-toggle {
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.2s;
+}
+
+.nearby-toggle:hover {
+  background: var(--bg-input);
+}
+
+.nearby-section {
+  border-top: 1px solid var(--border);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.nearby-section.open {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.nearby-controls {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nearby-radius-display {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #5b9bd5;
+  margin-bottom: 6px;
+  font-family: 'Playfair Display', serif;
+}
+
+.nearby-range {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.nearby-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #5b9bd5;
+  border: 3px solid var(--bg-panel);
+  box-shadow: 0 2px 8px var(--shadow);
+  cursor: grab;
+}
+
+.nearby-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #5b9bd5;
+  border: 3px solid var(--bg-panel);
+  box-shadow: 0 2px 8px var(--shadow);
+  cursor: grab;
+}
+
+.nearby-status {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.nearby-list {
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.nearby-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nearby-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.nearby-item {
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.nearby-item:hover {
+  background: var(--bg-card);
+}
+
+.nearby-dist {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b9bd5;
+  width: 45px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.nearby-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nearby-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nearby-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.nearby-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-gold-light);
+  flex-shrink: 0;
+}
+
+.nearby-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* User location marker */
+.user-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-dot {
+  width: 16px;
+  height: 16px;
+  background: #4285F4;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(66,133,244,0.3), 0 2px 8px rgba(0,0,0,0.3);
+}
+
 /* Leaflet dark tiles tweak */
 .leaflet-tile-pane {
   filter: brightness(0.92) contrast(1.05);
@@ -896,11 +1107,26 @@ select.filter-select option {
       <div class="ranking-list" id="rankingList"></div>
     </div>
 
+    <!-- Nearby -->
+    <button class="nearby-toggle" onclick="toggleNearby()">
+      <span>📍 Cerca de ti</span>
+      <span class="arrow" id="nearbyArrow">▼</span>
+    </button>
+    <div class="nearby-section" id="nearbySection">
+      <div class="nearby-controls">
+        <div class="nearby-radius-display" id="nearbyRadiusDisplay">Radio: 10 km</div>
+        <input type="range" class="nearby-range" id="nearbyRange" min="1" max="50" value="10">
+        <div class="nearby-status" id="nearbyStatus">Toca el botón 📍 del mapa para activar</div>
+      </div>
+      <div class="nearby-list" id="nearbyList"></div>
+    </div>
+
     <!-- List -->
     <div class="restaurant-list" id="restaurantList"></div>
   </aside>
 
   <div class="map-container">
+    <button class="locate-btn" id="locateBtn" onclick="locateMe()" title="Mi ubicación">📍</button>
     <div id="map"></div>
   </div>
 </div>
@@ -1262,6 +1488,139 @@ function updateRankings() {
 
   listEl.innerHTML = html;
 }
+
+// ── GEOLOCATION & NEARBY ──
+let userLat = null;
+let userLng = null;
+let userMarker = null;
+let userCircle = null;
+let nearbyRadius = 10;
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+window.locateMe = function() {
+  const btn = document.getElementById('locateBtn');
+  btn.classList.add('loading');
+
+  if (!navigator.geolocation) {
+    btn.classList.remove('loading');
+    document.getElementById('nearbyStatus').textContent = 'Tu navegador no soporta geolocalización';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      btn.classList.remove('loading');
+
+      // Remove old marker/circle
+      if (userMarker) map.removeLayer(userMarker);
+      if (userCircle) map.removeLayer(userCircle);
+
+      // Add user marker
+      const userIcon = L.divIcon({
+        className: 'user-marker',
+        html: '<div class="user-dot"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+      });
+      userMarker = L.marker([userLat, userLng], { icon: userIcon, zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup('<div style="font-family:DM Sans;font-size:13px;font-weight:600;color:#4285F4;padding:4px;">📍 Estás aquí</div>');
+
+      // Add radius circle
+      userCircle = L.circle([userLat, userLng], {
+        radius: nearbyRadius * 1000,
+        color: '#4285F4',
+        fillColor: '#4285F4',
+        fillOpacity: 0.08,
+        weight: 1.5,
+        dashArray: '6 4'
+      }).addTo(map);
+
+      // Fly to position
+      map.flyTo([userLat, userLng], 12, { duration: 1 });
+
+      // Update nearby
+      document.getElementById('nearbyStatus').textContent = 'Ubicación detectada ✓';
+      updateNearby();
+
+      // Auto-open nearby panel
+      const section = document.getElementById('nearbySection');
+      const arrow = document.getElementById('nearbyArrow');
+      if (!section.classList.contains('open')) {
+        section.classList.add('open');
+        arrow.classList.add('open');
+      }
+    },
+    function(err) {
+      btn.classList.remove('loading');
+      let msg = 'No se pudo obtener la ubicación';
+      if (err.code === 1) msg = 'Permiso de ubicación denegado. Actívalo en Ajustes.';
+      document.getElementById('nearbyStatus').textContent = msg;
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
+};
+
+window.toggleNearby = function() {
+  const section = document.getElementById('nearbySection');
+  const arrow = document.getElementById('nearbyArrow');
+  section.classList.toggle('open');
+  arrow.classList.toggle('open');
+};
+
+function updateNearby() {
+  const listEl = document.getElementById('nearbyList');
+
+  if (userLat === null) {
+    listEl.innerHTML = '<div class="nearby-empty">Toca el botón 📍 en el mapa<br>para ver restaurantes cerca de ti</div>';
+    return;
+  }
+
+  // Update circle radius
+  if (userCircle) userCircle.setRadius(nearbyRadius * 1000);
+
+  const withDist = restaurants.map(r => ({
+    ...r,
+    dist: haversineKm(userLat, userLng, r.lat, r.lng)
+  })).filter(r => r.dist <= nearbyRadius).sort((a, b) => a.dist - b.dist);
+
+  if (withDist.length === 0) {
+    listEl.innerHTML = '<div class="nearby-empty">No hay restaurantes en un radio de ' + nearbyRadius + ' km.<br>Prueba a ampliar el radio.</div>';
+    return;
+  }
+
+  let html = '';
+  withDist.forEach(r => {
+    const distStr = r.dist < 1 ? (r.dist * 1000).toFixed(0) + ' m' : r.dist.toFixed(1) + ' km';
+    const dotColor = r.visitado ? '#228B22' : '#CC9933';
+    const stars = r.visitado && r.puntuacion > 0 ? ' · ' + '★'.repeat(r.puntuacion) : '';
+    html += `<div class="nearby-item" onclick="flyTo(${r.id})">
+      <span class="nearby-dist">${distStr}</span>
+      <div class="nearby-info">
+        <div class="nearby-name">${r.nombre}</div>
+        <div class="nearby-meta">${r.ciudad} · ${r.tipo}${stars}</div>
+      </div>
+      <span class="nearby-price">${r.precio}€</span>
+    </div>`;
+  });
+
+  listEl.innerHTML = html;
+}
+
+document.getElementById('nearbyRange').addEventListener('input', function() {
+  nearbyRadius = parseInt(this.value);
+  document.getElementById('nearbyRadiusDisplay').textContent = 'Radio: ' + nearbyRadius + ' km';
+  updateNearby();
+});
 
 // ── INIT ──
 populateDropdowns();
