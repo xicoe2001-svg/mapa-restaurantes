@@ -241,8 +241,8 @@ function gk(r){return r.nombre+'|'+r.ciudad}
 const R=INITIAL_DATA.map((r,i)=>{const s=store[gk(r)]||{};return{...r,id:i,visitado:s.visitado||false,puntuacion:s.puntuacion||0}});
 function saveR(r){store[gk(r)]={visitado:r.visitado,puntuacion:r.puntuacion};save()}
 
-// ── MAP ──
-const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,attributionControl:true}).setView([39.5,-3],6);
+// ── MAP ── (preferReducedMotion for perf on mobile)
+const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true}).setView([39.5,-3],6);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:19}).addTo(map);
 const ML=L.layerGroup().addTo(map);let MK={};
 
@@ -260,18 +260,42 @@ function popHTML(r){
   }).join('');
   return '<div class="pop"><div class="pop-name">'+r.nombre+'</div><div class="pop-type">'+r.tipo+'</div><div class="pop-det"><span class="pop-det-ico">📍</span>'+r.ciudad+'</div><div class="pop-det"><span class="pop-det-ico">🏠</span>'+r.direccion+'</div><div class="pop-price">'+r.precio+'€ / pers</div><div class="pop-hr"></div><div class="pop-toggle"><span class="pop-toggle-label">¿He ido?</span><label class="tgl"><input type="checkbox" '+(r.visitado?'checked':'')+' onchange="toggleV('+r.id+',this.checked)"><span class="tgl-s"></span></label></div><div class="stars-lbl">Puntuación</div><div class="stars">'+st+'</div></div>';
 }
-R.forEach(r=>{const m=L.marker([r.lat,r.lng],{icon:mkIcon(r.visitado,false)});m.bindPopup(popHTML(r),{maxWidth:280,minWidth:260});MK[r.id]=m;ML.addLayer(m)});
+// Create markers without binding popups yet (lazy bind on click for perf)
+R.forEach(r=>{
+  const m=L.marker([r.lat,r.lng],{icon:mkIcon(r.visitado,false)});
+  m.on('click',function(){if(!m.getPopup())m.bindPopup(popHTML(r),{maxWidth:280,minWidth:250}).openPopup();});
+  MK[r.id]=m;ML.addLayer(m);
+});
 
 // ── INTERACTIONS ──
-window.toggleV=function(id,c){const r=R[id];r.visitado=c;if(!c)r.puntuacion=0;saveR(r);MK[id].setIcon(mkIcon(r.visitado,nearbyIds.has(id)));MK[id].setPopupContent(popHTML(r));refresh()};
-window.setRate=function(id,n){const r=R[id];if(!r.visitado)return;r.puntuacion=r.puntuacion===n?0:n;saveR(r);MK[id].setPopupContent(popHTML(r));refresh()};
-window.flyTo=function(id){const r=R[id];map.flyTo([r.lat,r.lng],15,{duration:.8});setTimeout(()=>MK[id].openPopup(),900);closeSheet()};
+window.toggleV=function(id,c){
+  const r=R[id];r.visitado=c;if(!c)r.puntuacion=0;saveR(r);
+  MK[id].setIcon(mkIcon(r.visitado,nearbyIds.has(id)));
+  if(MK[id].getPopup()){MK[id].setPopupContent(popHTML(r))}
+  refresh();
+};
+window.setRate=function(id,n){
+  const r=R[id];if(!r.visitado)return;
+  r.puntuacion=r.puntuacion===n?0:n;saveR(r);
+  if(MK[id].getPopup()){MK[id].setPopupContent(popHTML(r))}
+  updateRankings();
+};
+window.flyTo=function(id){
+  const r=R[id];
+  map.flyTo([r.lat,r.lng],15,{duration:.6});
+  setTimeout(function(){
+    if(!MK[id].getPopup())MK[id].bindPopup(popHTML(r),{maxWidth:280,minWidth:250});
+    MK[id].openPopup();
+  },700);
+  closeSheet();
+};
 
-// ── FILTERS ──
+// ── FILTER STATE ──
 let fSearch='',fCity='',fType='',fStatus='all',fMaxPrice=100;
+
 function getFiltered(){
-  return R.filter(r=>{
-    if(fSearch&&!r.nombre.toLowerCase().includes(fSearch))return false;
+  return R.filter(function(r){
+    if(fSearch&&r.nombre.toLowerCase().indexOf(fSearch)===-1)return false;
     if(fCity&&r.ciudad!==fCity)return false;
     if(fType&&r.tipo!==fType)return false;
     if(fStatus==='visited'&&!r.visitado)return false;
@@ -280,162 +304,212 @@ function getFiltered(){
     return true;
   });
 }
+
 function applyFilters(){
   ML.clearLayers();
-  const f=getFiltered();
-  f.forEach(r=>ML.addLayer(MK[r.id]));
-  updateStats(f.length);updateList(f);updateRankings();
+  var f=getFiltered();
+  f.forEach(function(r){ML.addLayer(MK[r.id])});
+  // Update stats everywhere
+  var v=R.filter(function(r){return r.visitado}).length;
+  var p=R.length-v;
+  document.querySelectorAll('.js-sp').forEach(function(e){e.textContent=p+' pendientes'});
+  document.querySelectorAll('.js-sv').forEach(function(e){e.textContent=v+' visitados'});
+  document.querySelectorAll('.js-ss').forEach(function(e){e.textContent=f.length+' mapa'});
+  updateList(f);
 }
 
-// ── BUILD FILTER HTML ──
-function buildFilterHTML(){
-  const cities=[...new Set(R.map(r=>r.ciudad))].sort();
-  const types=[...new Set(R.map(r=>r.tipo))].sort();
-  const prices=R.map(r=>r.precio);const minP=Math.min(...prices),maxP=Math.max(...prices);
+// ── BUILD FILTERS ──
+function buildFilterHTML(prefix){
+  var cities=[...new Set(R.map(function(r){return r.ciudad}))].sort();
+  var types=[...new Set(R.map(function(r){return r.tipo}))].sort();
+  var prices=R.map(function(r){return r.precio});
+  var minP=Math.min.apply(null,prices),maxP=Math.max.apply(null,prices);
   fMaxPrice=maxP;
-  const h=`
-<div class="f-section"><div class="f-label">Buscar</div><div class="f-search-wrap"><input class="f-search" id="__search__" placeholder="Nombre..." value=""></div></div>
-<div class="f-section"><div class="f-label">Ciudad</div><select class="f-select" id="__city__"><option value="">Todas</option>${cities.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></div>
-<div class="f-section"><div class="f-label">Tipo</div><select class="f-select" id="__type__"><option value="">Todos</option>${types.map(t=>'<option value="'+t+'">'+t+'</option>').join('')}</select></div>
-<div class="f-section"><div class="f-label">Estado</div><div class="f-pills"><button class="f-pill on" data-s="all">Todos</button><button class="f-pill" data-s="visited">Visitados</button><button class="f-pill" data-s="pending">Pendientes</button></div></div>
-<div class="f-section"><div class="f-label">Presupuesto máximo</div><div class="f-price-val" id="__pricelbl__">Hasta ${maxP}€</div><input type="range" class="f-range" id="__price__" min="${minP}" max="${maxP}" value="${maxP}"><div class="f-minmax"><span>${minP}€</span><span>${maxP}€</span></div></div>
-<div class="f-stats"><span class="s-pend" id="__sp__">0 pendientes</span><span class="s-visit" id="__sv__">0 visitados</span><span class="s-show" id="__ss__">0 mapa</span></div>
-<button class="f-clear" onclick="clearF()">✕ Limpiar filtros</button>`;
-  return h;
+  return '<div class="f-section"><div class="f-label">Buscar</div><div class="f-search-wrap"><input class="f-search js-search" placeholder="Nombre..." value=""></div></div>'+
+  '<div class="f-section"><div class="f-label">Ciudad</div><select class="f-select js-city"><option value="">Todas</option>'+cities.map(function(c){return'<option value="'+c+'">'+c+'</option>'}).join('')+'</select></div>'+
+  '<div class="f-section"><div class="f-label">Tipo</div><select class="f-select js-type"><option value="">Todos</option>'+types.map(function(t){return'<option value="'+t+'">'+t+'</option>'}).join('')+'</select></div>'+
+  '<div class="f-section"><div class="f-label">Estado</div><div class="f-pills"><button class="f-pill on js-status" data-s="all">Todos</button><button class="f-pill js-status" data-s="visited">Visitados</button><button class="f-pill js-status" data-s="pending">Pendientes</button></div></div>'+
+  '<div class="f-section"><div class="f-label">Presupuesto máximo</div><div class="f-price-val js-pricelbl">Hasta '+maxP+'€</div><input type="range" class="f-range js-price" min="'+minP+'" max="'+maxP+'" value="'+maxP+'"><div class="f-minmax"><span>'+minP+'€</span><span>'+maxP+'€</span></div></div>'+
+  '<div class="f-stats"><span class="s-pend js-sp">0 pendientes</span><span class="s-visit js-sv">0 visitados</span><span class="s-show js-ss">0 mapa</span></div>'+
+  '<button class="f-clear" onclick="clearF()">✕ Limpiar filtros</button>';
 }
 
-function attachFilterEvents(container){
-  container.querySelector('[id$="search__"]').addEventListener('input',function(){fSearch=this.value.toLowerCase().trim();applyFilters()});
-  container.querySelector('[id$="city__"]').addEventListener('change',function(){fCity=this.value;applyFilters()});
-  container.querySelector('[id$="type__"]').addEventListener('change',function(){fType=this.value;applyFilters()});
-  container.querySelectorAll('.f-pill').forEach(b=>b.addEventListener('click',function(){
-    container.querySelectorAll('.f-pill').forEach(x=>x.classList.remove('on'));this.classList.add('on');fStatus=this.dataset.s;applyFilters();
-  }));
-  container.querySelector('[id$="price__"]').addEventListener('input',function(){
-    fMaxPrice=parseInt(this.value);container.querySelector('[id$="pricelbl__"]').textContent='Hasta '+this.value+'€';applyFilters();
+function syncAllFilters(){
+  // Sync values across mobile and desktop filter panels
+  document.querySelectorAll('.js-search').forEach(function(e){e.value=fSearch});
+  document.querySelectorAll('.js-city').forEach(function(e){e.value=fCity});
+  document.querySelectorAll('.js-type').forEach(function(e){e.value=fType});
+  document.querySelectorAll('.js-status').forEach(function(b){
+    b.classList.toggle('on',b.dataset.s===fStatus);
   });
+  document.querySelectorAll('.js-price').forEach(function(e){e.value=fMaxPrice});
+  document.querySelectorAll('.js-pricelbl').forEach(function(e){e.textContent='Hasta '+fMaxPrice+'€'});
 }
+
+// Use event delegation on document for all filter interactions
+document.addEventListener('input',function(e){
+  if(e.target.classList.contains('js-search')){
+    fSearch=e.target.value.toLowerCase().trim();
+    syncAllFilters();applyFilters();
+  }
+  if(e.target.classList.contains('js-price')){
+    fMaxPrice=parseInt(e.target.value);
+    syncAllFilters();applyFilters();
+  }
+});
+document.addEventListener('change',function(e){
+  if(e.target.classList.contains('js-city')){
+    fCity=e.target.value;syncAllFilters();applyFilters();
+  }
+  if(e.target.classList.contains('js-type')){
+    fType=e.target.value;syncAllFilters();applyFilters();
+  }
+});
+document.addEventListener('click',function(e){
+  if(e.target.classList.contains('js-status')){
+    fStatus=e.target.dataset.s;
+    syncAllFilters();applyFilters();
+  }
+});
 
 window.clearF=function(){
   fSearch='';fCity='';fType='';fStatus='all';
-  document.querySelectorAll('.f-search').forEach(e=>e.value='');
-  document.querySelectorAll('.f-select').forEach(e=>e.value='');
-  document.querySelectorAll('.f-pill').forEach(b=>{b.classList.toggle('on',b.dataset.s==='all')});
-  document.querySelectorAll('.f-range').forEach(e=>{e.value=e.max;fMaxPrice=parseInt(e.max)});
-  document.querySelectorAll('[id$="pricelbl__"]').forEach(e=>e.textContent='Hasta '+fMaxPrice+'€');
-  applyFilters();
+  var prices=R.map(function(r){return r.precio});fMaxPrice=Math.max.apply(null,prices);
+  syncAllFilters();applyFilters();
 };
 
-function updateStats(shown){
-  const v=R.filter(r=>r.visitado).length,p=R.length-v;
-  document.querySelectorAll('[id$="sp__"]').forEach(e=>e.textContent=p+' pendientes');
-  document.querySelectorAll('[id$="sv__"]').forEach(e=>e.textContent=v+' visitados');
-  document.querySelectorAll('[id$="ss__"]').forEach(e=>e.textContent=shown+' mapa');
-}
-
 function updateList(filtered){
-  const f=filtered||getFiltered();
-  let h='';
-  f.forEach(r=>{
-    const col=r.visitado?'var(--green)':nearbyIds.has(r.id)?'var(--blue)':'var(--gold)';
-    const st=r.visitado&&r.puntuacion>0?' · '+'★'.repeat(r.puntuacion):'';
+  var f=filtered||getFiltered();
+  var h='';
+  f.forEach(function(r){
+    var col=r.visitado?'var(--green)':nearbyIds.has(r.id)?'var(--blue)':'var(--gold)';
+    var st=r.visitado&&r.puntuacion>0?' · '+'★'.repeat(r.puntuacion):'';
     h+='<div class="li" onclick="flyTo('+r.id+')"><span class="li-dot" style="background:'+col+'"></span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+st+'</div></div><span class="li-right">'+r.precio+'€</span></div>';
   });
   if(!h)h='<div class="li-empty">Sin resultados</div>';
-  document.getElementById('mobileList').innerHTML=h;
-  const dl=document.getElementById('deskList');if(dl)dl.innerHTML=h;
+  var ml=document.getElementById('mobileList');if(ml)ml.innerHTML=h;
+  var dl=document.getElementById('deskList');if(dl)dl.innerHTML=h;
 }
 
 // ── RANKINGS ──
-let rkTab='top';
-window.setRkTab=function(el){document.querySelectorAll('.rk-tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');rkTab=el.dataset.rk;updateRankings()};
+var rkTab='top';
+window.setRkTab=function(el){
+  document.querySelectorAll('.rk-tab').forEach(function(t){t.classList.remove('on')});
+  el.classList.add('on');rkTab=el.dataset.rk;updateRankings();
+};
 function updateRankings(){
-  const rated=R.filter(r=>r.visitado&&r.puntuacion>0);const el=document.getElementById('rkList');
+  var rated=R.filter(function(r){return r.visitado&&r.puntuacion>0});
+  var el=document.getElementById('rkList');
   if(!rated.length){el.innerHTML='<div class="li-empty">Aún no has puntuado ningún restaurante</div>';return}
-  let sorted;
-  if(rkTab==='top')sorted=[...rated].sort((a,b)=>b.puntuacion-a.puntuacion||a.precio-b.precio);
-  else sorted=[...rated].sort((a,b)=>(b.puntuacion/b.precio)-(a.puntuacion/a.precio));
-  let h='';
-  sorted.slice(0,15).forEach((r,i)=>{
-    const pc=i===0?'p1':i===1?'p2':i===2?'p3':'';
-    const sc=rkTab==='top'?'★'.repeat(r.puntuacion):'★'.repeat(r.puntuacion)+' · '+r.precio+'€';
+  var sorted;
+  if(rkTab==='top')sorted=rated.slice().sort(function(a,b){return b.puntuacion-a.puntuacion||a.precio-b.precio});
+  else sorted=rated.slice().sort(function(a,b){return(b.puntuacion/b.precio)-(a.puntuacion/a.precio)});
+  var h='';
+  sorted.slice(0,15).forEach(function(r,i){
+    var pc=i===0?'p1':i===1?'p2':i===2?'p3':'';
+    var sc=rkTab==='top'?'★'.repeat(r.puntuacion):'★'.repeat(r.puntuacion)+' · '+r.precio+'€';
     h+='<div class="li" onclick="flyTo('+r.id+')"><span class="rk-pos '+pc+'">'+(i+1)+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><span class="li-right">'+sc+'</span></div>';
   });
   el.innerHTML=h;
 }
 
 // ── GEOLOCATION ──
-let uLat=null,uLng=null,uMarker=null,uCircle=null,nbRadius=10;
-function haversine(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
+var uLat=null,uLng=null,uMarker=null,uCircle=null,nbRadius=10;
+function haversine(a,b,c,d){var RR=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return RR*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
 
 window.locateMe=function(){
-  const btn=document.getElementById('locateBtn');btn.classList.add('loading');
-  if(!navigator.geolocation){btn.classList.remove('loading');document.getElementById('nbStatus').textContent='Geolocalización no soportada';return}
+  var btn=document.getElementById('locateBtn');btn.classList.add('loading');
+  if(!navigator.geolocation){btn.classList.remove('loading');document.getElementById('nbStatus').textContent='Geolocalización no disponible';return}
   navigator.geolocation.getCurrentPosition(function(p){
     uLat=p.coords.latitude;uLng=p.coords.longitude;btn.classList.remove('loading');
     if(uMarker)map.removeLayer(uMarker);if(uCircle)map.removeLayer(uCircle);
-    uMarker=L.marker([uLat,uLng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map).bindPopup('<div style="font-family:DM Sans;font-size:13px;font-weight:600;color:var(--blue);padding:4px">📍 Estás aquí</div>');
+    uMarker=L.marker([uLat,uLng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map);
     uCircle=L.circle([uLat,uLng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.06,weight:1.5,dashArray:'6 4'}).addTo(map);
-    map.flyTo([uLat,uLng],12,{duration:1});
+    map.setView([uLat,uLng],12);
     document.getElementById('nbStatus').textContent='Ubicación detectada ✓';
     updateNearby();
+    // On mobile, auto-open nearby sheet
     if(window.innerWidth<=768)openSheet('nearby');
-  },function(e){
+  },function(err){
     btn.classList.remove('loading');
-    document.getElementById('nbStatus').textContent=e.code===1?'Permiso denegado':'Error obteniendo ubicación';
-  },{enableHighAccuracy:true,timeout:10000,maximumAge:30000});
+    var msg='Error obteniendo ubicación';
+    if(err.code===1)msg='Permiso denegado. Actívalo en Ajustes > Safari > Ubicación';
+    if(err.code===2)msg='Ubicación no disponible';
+    if(err.code===3)msg='Tiempo de espera agotado';
+    document.getElementById('nbStatus').textContent=msg;
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
 };
 
 function updateNearby(){
-  const el=document.getElementById('nearbyList');
-  const old=new Set(nearbyIds);nearbyIds=new Set();
-  if(!uLat){el.innerHTML='<div class="li-empty">Pulsa 📍 en el mapa para ver restaurantes cerca</div>';old.forEach(id=>{const r=R[id];MK[id].setIcon(mkIcon(r.visitado,false))});return}
+  var el=document.getElementById('nearbyList');
+  var old=new Set(nearbyIds);nearbyIds=new Set();
+  if(uLat===null){
+    el.innerHTML='<div class="li-empty">Pulsa 📍 en el mapa para ver restaurantes cerca</div>';
+    old.forEach(function(id){MK[id].setIcon(mkIcon(R[id].visitado,false))});
+    return;
+  }
   if(uCircle)uCircle.setRadius(nbRadius*1000);
-  const near=R.map(r=>({...r,dist:haversine(uLat,uLng,r.lat,r.lng)})).filter(r=>r.dist<=nbRadius).sort((a,b)=>a.dist-b.dist);
-  near.forEach(r=>nearbyIds.add(r.id));
-  old.forEach(id=>{if(!nearbyIds.has(id)){const r=R[id];MK[id].setIcon(mkIcon(r.visitado,false))}});
-  nearbyIds.forEach(id=>{const r=R[id];MK[id].setIcon(mkIcon(r.visitado,true))});
+  var near=R.map(function(r){return{id:r.id,nombre:r.nombre,tipo:r.tipo,ciudad:r.ciudad,precio:r.precio,visitado:r.visitado,puntuacion:r.puntuacion,dist:haversine(uLat,uLng,r.lat,r.lng)}})
+    .filter(function(r){return r.dist<=nbRadius})
+    .sort(function(a,b){return a.dist-b.dist});
+  near.forEach(function(r){nearbyIds.add(r.id)});
+  // Reset old markers, set new nearby markers
+  old.forEach(function(id){if(!nearbyIds.has(id))MK[id].setIcon(mkIcon(R[id].visitado,false))});
+  nearbyIds.forEach(function(id){MK[id].setIcon(mkIcon(R[id].visitado,true))});
   if(!near.length){el.innerHTML='<div class="li-empty">No hay restaurantes en '+nbRadius+' km</div>';return}
-  let h='';
-  near.forEach(r=>{
-    const d=r.dist<1?(r.dist*1000).toFixed(0)+' m':r.dist.toFixed(1)+' km';
-    const col=r.visitado?'var(--green)':'var(--blue)';
+  var h='';
+  near.forEach(function(r){
+    var d=r.dist<1?(r.dist*1000).toFixed(0)+' m':r.dist.toFixed(1)+' km';
     h+='<div class="li" onclick="flyTo('+r.id+')"><span class="nb-dist">'+d+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><span class="li-right">'+r.precio+'€</span></div>';
   });
   el.innerHTML=h;
 }
-document.getElementById('nbRange').addEventListener('input',function(){nbRadius=parseInt(this.value);document.getElementById('nbRadiusDisplay').textContent='Radio: '+nbRadius+' km';updateNearby()});
+
+document.getElementById('nbRange').addEventListener('input',function(){
+  nbRadius=parseInt(this.value);
+  document.getElementById('nbRadiusDisplay').textContent='Radio: '+nbRadius+' km';
+  updateNearby();
+});
 
 // ── SHEETS ──
-let activeSheet=null;
+var activeSheet=null;
 window.openSheet=function(name){
   closeSheet();
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const btns=document.querySelectorAll('.nav-btn');
-  const idx={filters:0,list:1,nearby:2,rankings:3}[name];
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active')});
+  var btns=document.querySelectorAll('.nav-btn');
+  var idx={filters:0,list:1,nearby:2,rankings:3}[name];
   if(btns[idx])btns[idx].classList.add('active');
-  const s=document.getElementById('sheet-'+name);
-  if(s){s.classList.add('on');document.getElementById('overlay').classList.add('on');activeSheet=name}
+  var s=document.getElementById('sheet-'+name);
+  if(s){
+    s.classList.add('on');
+    document.getElementById('overlay').classList.add('on');
+    activeSheet=name;
+    // Force list update when opening list
+    if(name==='list')updateList();
+    if(name==='rankings')updateRankings();
+  }
 };
 window.closeSheet=function(){
-  document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('on'));
-  document.getElementById('overlay').classList.remove('on');activeSheet=null;
+  document.querySelectorAll('.sheet').forEach(function(s){s.classList.remove('on')});
+  document.getElementById('overlay').classList.remove('on');
+  activeSheet=null;
 };
 
 function refresh(){applyFilters();updateNearby();updateRankings()}
 
 // ── INIT ──
-// Build filters in both mobile and desktop
-const mfEl=document.getElementById('mobileFilters');
-mfEl.innerHTML=buildFilterHTML().replace(/__/g,'m_');
-attachFilterEvents(mfEl);
+// Build filter HTML in both containers
+var filterHTML=buildFilterHTML();
+var mf=document.getElementById('mobileFilters');if(mf)mf.innerHTML=filterHTML;
+var df=document.getElementById('deskFilters');if(df)df.innerHTML=filterHTML;
 
-const dfEl=document.getElementById('deskFilters');
-if(dfEl){dfEl.innerHTML=buildFilterHTML().replace(/__/g,'d_');attachFilterEvents(dfEl)}
-
+// Initial render
 applyFilters();
 updateNearby();
 updateRankings();
+
+// Fix Leaflet size on mobile after everything loads
+setTimeout(function(){map.invalidateSize()},100);
 </script>
 </body>
 </html>
