@@ -582,17 +582,182 @@ select.filter-select option {
   position: absolute;
   top: 12px;
   left: 12px;
-  z-index: 1001;
-  width: 40px;
-  height: 40px;
+  z-index: 1002;
+  width: 44px;
+  height: 44px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  transition: left 0.3s ease, background 0.2s;
+}
+
+.mobile-toggle.shifted {
+  left: 288px;
+  background: var(--bg-card);
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+}
+
+.sidebar-overlay.visible {
+  display: block;
+}
+
+/* Rankings panel */
+.rankings-section {
+  border-top: 1px solid var(--border);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.rankings-section.open {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.rankings-toggle {
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.2s;
+}
+
+.rankings-toggle:hover {
+  background: var(--bg-input);
+}
+
+.rankings-toggle .arrow {
+  transition: transform 0.3s;
+  font-size: 11px;
+}
+
+.rankings-toggle .arrow.open {
+  transform: rotate(180deg);
+}
+
+.ranking-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ranking-tab {
+  flex: 1;
+  padding: 8px 6px;
+  background: var(--bg-panel);
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.ranking-tab.active {
+  color: var(--accent-gold-light);
+  border-bottom-color: var(--accent-gold);
+  background: var(--bg-card);
+}
+
+.ranking-list {
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.ranking-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ranking-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.rank-item {
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rank-item:hover {
+  background: var(--bg-card);
+}
+
+.rank-pos {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rank-pos.gold { color: #e6b84d; }
+.rank-pos.silver { color: #b0b0b0; }
+.rank-pos.bronze { color: #cd7f32; }
+
+.rank-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rank-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.rank-score {
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--accent-gold-light);
+}
+
+.rank-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 @media (max-width: 768px) {
@@ -604,8 +769,8 @@ select.filter-select option {
     z-index: 1001;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    width: 300px;
-    min-width: 300px;
+    width: 280px;
+    min-width: 280px;
   }
   .sidebar.open {
     transform: translateX(0);
@@ -643,7 +808,8 @@ select.filter-select option {
 <body>
 
 <div class="app">
-  <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+  <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">☰</button>
 
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
@@ -715,6 +881,19 @@ select.filter-select option {
       <div class="stat-item">
         <span id="statShown">0 en mapa</span>
       </div>
+    </div>
+
+    <!-- Rankings -->
+    <button class="rankings-toggle" onclick="toggleRankings()">
+      <span>⭐ Rankings</span>
+      <span class="arrow" id="rankArrow">▼</span>
+    </button>
+    <div class="rankings-section" id="rankingsSection">
+      <div class="ranking-tabs">
+        <button class="ranking-tab active" data-rank="top" onclick="setRankTab(this)">Mejor valorados</button>
+        <button class="ranking-tab" data-rank="value" onclick="setRankTab(this)">Calidad-Precio</button>
+      </div>
+      <div class="ranking-list" id="rankingList"></div>
     </div>
 
     <!-- List -->
@@ -861,6 +1040,7 @@ window.setRating = function(id, rating) {
   marker.setPopupContent(createPopupContent(r));
 
   updateList();
+  updateRankings();
 };
 
 // ── FILTERS ──
@@ -955,6 +1135,7 @@ function updateStats() {
   const pending = restaurants.length - visited;
   document.getElementById('statVisited').textContent = visited + ' visitados';
   document.getElementById('statPending').textContent = pending + ' pendientes';
+  updateRankings();
 }
 
 // ── LIST ──
@@ -993,11 +1174,94 @@ window.flyTo = function(id) {
   const r = restaurants[id];
   map.flyTo([r.lat, r.lng], 15, { duration: 0.8 });
   setTimeout(() => markers[id].openPopup(), 900);
-  // Close sidebar on mobile
-  if (window.innerWidth <= 768) {
-    document.querySelector('.sidebar').classList.remove('open');
+  closeSidebar();
+};
+
+// ── SIDEBAR TOGGLE (mobile) ──
+window.toggleSidebar = function() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const btn = document.getElementById('mobileToggle');
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('visible');
+    btn.classList.add('shifted');
+    btn.textContent = '✕';
   }
 };
+
+window.closeSidebar = function() {
+  if (window.innerWidth > 768) return;
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const btn = document.getElementById('mobileToggle');
+  sidebar.classList.remove('open');
+  overlay.classList.remove('visible');
+  btn.classList.remove('shifted');
+  btn.textContent = '☰';
+};
+
+// ── RANKINGS ──
+let currentRankTab = 'top';
+
+window.toggleRankings = function() {
+  const section = document.getElementById('rankingsSection');
+  const arrow = document.getElementById('rankArrow');
+  section.classList.toggle('open');
+  arrow.classList.toggle('open');
+};
+
+window.setRankTab = function(el) {
+  document.querySelectorAll('.ranking-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentRankTab = el.dataset.rank;
+  updateRankings();
+};
+
+function updateRankings() {
+  const listEl = document.getElementById('rankingList');
+  const rated = restaurants.filter(r => r.visitado && r.puntuacion > 0);
+
+  if (rated.length === 0) {
+    listEl.innerHTML = '<div class="rank-empty">Aún no has puntuado ningún restaurante.<br>¡Visita alguno y dale estrellas!</div>';
+    return;
+  }
+
+  let sorted;
+  if (currentRankTab === 'top') {
+    sorted = [...rated].sort((a, b) => b.puntuacion - a.puntuacion || a.precio - b.precio);
+  } else {
+    // Calidad-precio: puntuación / precio * 100
+    sorted = [...rated].sort((a, b) => {
+      const scoreA = a.puntuacion / a.precio;
+      const scoreB = b.puntuacion / b.precio;
+      return scoreB - scoreA;
+    });
+  }
+
+  let html = '';
+  sorted.slice(0, 15).forEach((r, i) => {
+    const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const stars = '★'.repeat(r.puntuacion);
+    const scoreText = currentRankTab === 'top'
+      ? stars
+      : stars + ' · ' + r.precio + '€';
+
+    html += `<div class="rank-item" onclick="flyTo(${r.id})">
+      <span class="rank-pos ${posClass}">${i + 1}</span>
+      <div class="rank-info">
+        <div class="rank-name">${r.nombre}</div>
+        <div class="rank-meta">${r.ciudad} · ${r.tipo}</div>
+      </div>
+      <span class="rank-score">${scoreText}</span>
+    </div>`;
+  });
+
+  listEl.innerHTML = html;
+}
 
 // ── INIT ──
 populateDropdowns();
