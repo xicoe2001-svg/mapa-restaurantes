@@ -8,7 +8,10 @@
 <meta name="theme-color" content="#111114">
 <title>Mapa Gastronómico</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -131,6 +134,14 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 .star.off{opacity:.3;cursor:not-allowed}
 .stars-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 
+/* ── CLUSTERS ── */
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(204,153,51,.25)!important}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:var(--gold)!important;color:#111!important;font-family:'DM Sans',sans-serif!important;font-weight:700!important;font-size:13px!important}
+
+/* ── GMAPS BUTTON ── */
+.pop-gmaps{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .15s}
+.pop-gmaps:active{background:#1557b0}
+
 /* ── LEAFLET TWEAKS ── */
 .leaflet-control-zoom a{background:var(--card)!important;color:var(--txt)!important;border-color:var(--border)!important}
 .leaflet-control-attribution{background:rgba(17,17,20,.8)!important;color:var(--muted)!important;font-size:8px!important}
@@ -241,10 +252,23 @@ function gk(r){return r.nombre+'|'+r.ciudad}
 const R=INITIAL_DATA.map((r,i)=>{const s=store[gk(r)]||{};return{...r,id:i,visitado:s.visitado||false,puntuacion:s.puntuacion||0}});
 function saveR(r){store[gk(r)]={visitado:r.visitado,puntuacion:r.puntuacion};save()}
 
-// ── MAP ── (preferReducedMotion for perf on mobile)
-const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true}).setView([39.5,-3],6);
+// ── MAP ──
+const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true,maxZoom:18}).setView([39.5,-3],6);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:19}).addTo(map);
-const ML=L.layerGroup().addTo(map);let MK={};
+
+// MarkerCluster for performance
+const ML=L.markerClusterGroup({
+  maxClusterRadius:50,
+  spiderfyOnMaxZoom:true,
+  showCoverageOnHover:false,
+  chunkedLoading:true,
+  chunkInterval:100,
+  chunkDelay:10,
+  animate:false,
+  disableClusteringAtZoom:14
+});
+map.addLayer(ML);
+let MK={};
 
 // ── MARKERS ──
 let nearbyIds=new Set();
@@ -254,18 +278,22 @@ function mkIcon(v,nb){
   return L.divIcon({className:'custom-marker',html:'<div class="pin '+c+'"><span class="pin-i">'+ic+'</span></div>',iconSize:[28,36],iconAnchor:[14,36],popupAnchor:[0,-38]});
 }
 function popHTML(r){
-  const st=[1,2,3,4,5].map(n=>{
-    const a=n<=r.puntuacion?'on':'';const d=!r.visitado?'off':'';
+  var st=[1,2,3,4,5].map(function(n){
+    var a=n<=r.puntuacion?'on':'';var d=!r.visitado?'off':'';
     return '<button class="star '+a+' '+d+'" onclick="setRate('+r.id+','+n+')" '+(d?'disabled':'')+'>★</button>';
   }).join('');
-  return '<div class="pop"><div class="pop-name">'+r.nombre+'</div><div class="pop-type">'+r.tipo+'</div><div class="pop-det"><span class="pop-det-ico">📍</span>'+r.ciudad+'</div><div class="pop-det"><span class="pop-det-ico">🏠</span>'+r.direccion+'</div><div class="pop-price">'+r.precio+'€ / pers</div><div class="pop-hr"></div><div class="pop-toggle"><span class="pop-toggle-label">¿He ido?</span><label class="tgl"><input type="checkbox" '+(r.visitado?'checked':'')+' onchange="toggleV('+r.id+',this.checked)"><span class="tgl-s"></span></label></div><div class="stars-lbl">Puntuación</div><div class="stars">'+st+'</div></div>';
+  var gmapsUrl='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(r.nombre+' '+r.direccion);
+  return '<div class="pop"><div class="pop-name">'+r.nombre+'</div><div class="pop-type">'+r.tipo+'</div><div class="pop-det"><span class="pop-det-ico">📍</span>'+r.ciudad+'</div><div class="pop-det"><span class="pop-det-ico">🏠</span>'+r.direccion+'</div><div class="pop-price">'+r.precio+'€ / pers</div><div class="pop-hr"></div><div class="pop-toggle"><span class="pop-toggle-label">¿He ido?</span><label class="tgl"><input type="checkbox" '+(r.visitado?'checked':'')+' onchange="toggleV('+r.id+',this.checked)"><span class="tgl-s"></span></label></div><div class="stars-lbl">Puntuación</div><div class="stars">'+st+'</div><a href="'+gmapsUrl+'" target="_blank" rel="noopener" class="pop-gmaps">📍 Abrir en Google Maps</a></div>';
 }
-// Create markers without binding popups yet (lazy bind on click for perf)
-R.forEach(r=>{
-  const m=L.marker([r.lat,r.lng],{icon:mkIcon(r.visitado,false)});
-  m.on('click',function(){if(!m.getPopup())m.bindPopup(popHTML(r),{maxWidth:280,minWidth:250}).openPopup();});
-  MK[r.id]=m;ML.addLayer(m);
+// Create markers with lazy popup binding
+var markersArr=[];
+R.forEach(function(r){
+  var m=L.marker([r.lat,r.lng],{icon:mkIcon(r.visitado,false)});
+  m.on('click',function(){if(!m.getPopup()){m.bindPopup(popHTML(r),{maxWidth:280,minWidth:250});m.openPopup()}});
+  MK[r.id]=m;
+  markersArr.push(m);
 });
+ML.addLayers(markersArr);
 
 // ── INTERACTIONS ──
 window.toggleV=function(id,c){
@@ -308,7 +336,9 @@ function getFiltered(){
 function applyFilters(){
   ML.clearLayers();
   var f=getFiltered();
-  f.forEach(function(r){ML.addLayer(MK[r.id])});
+  var batch=[];
+  f.forEach(function(r){batch.push(MK[r.id])});
+  ML.addLayers(batch);
   // Update stats everywhere
   var v=R.filter(function(r){return r.visitado}).length;
   var p=R.length-v;
@@ -472,7 +502,8 @@ function updateNearby(){
   var h='';
   near.forEach(function(r){
     var d=r.dist<1?(r.dist*1000).toFixed(0)+' m':r.dist.toFixed(1)+' km';
-    h+='<div class="li" onclick="flyTo('+r.id+')"><span class="nb-dist">'+d+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><span class="li-right">'+r.precio+'€</span></div>';
+    var gurl='https://www.google.com/maps/dir/?api=1&destination='+R[r.id].lat+','+R[r.id].lng+'&travelmode=walking';
+    h+='<div class="li" onclick="flyTo('+r.id+')"><span class="nb-dist">'+d+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><a href="'+gurl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:18px;text-decoration:none;flex-shrink:0;padding:4px">🧭</a><span class="li-right">'+r.precio+'€</span></div>';
   });
   el.innerHTML=h;
 }
