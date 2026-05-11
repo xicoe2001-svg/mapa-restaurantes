@@ -454,84 +454,45 @@ function updateRankings(){
 }
 
 // ── GEOLOCATION ──
-var uLat=null,uLng=null,uMarker=null,uCircle=null,uAccCircle=null,nbRadius=10,watchId=null;
+var uLat=null,uLng=null,uMarker=null,uCircle=null,nbRadius=10;
 function haversine(a,b,c,d){var RR=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return RR*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
-
-function updateUserPosition(lat,lng,acc){
-  var firstTime=(uLat===null);
-  uLat=lat;uLng=lng;
-  
-  if(uMarker){uMarker.setLatLng([lat,lng])}
-  else{
-    uMarker=L.marker([lat,lng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map);
-  }
-  
-  // Accuracy circle
-  if(uAccCircle){uAccCircle.setLatLng([lat,lng]);uAccCircle.setRadius(acc)}
-  else{
-    uAccCircle=L.circle([lat,lng],{radius:acc,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.08,weight:1,interactive:false}).addTo(map);
-  }
-  
-  // Nearby radius circle
-  if(uCircle){uCircle.setLatLng([lat,lng]);uCircle.setRadius(nbRadius*1000)}
-  else{
-    uCircle=L.circle([lat,lng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.04,weight:1.5,dashArray:'6 4',interactive:false}).addTo(map);
-  }
-  
-  if(firstTime){
-    map.setView([lat,lng],13);
-    document.getElementById('nbStatus').textContent='Ubicación activa ✓';
-    if(window.innerWidth<=768)openSheet('nearby');
-  }
-  
-  updateNearby();
-}
 
 window.locateMe=function(){
   var btn=document.getElementById('locateBtn');
   var statusEl=document.getElementById('nbStatus');
-  
-  if(!navigator.geolocation){statusEl.textContent='Geolocalización no disponible';return}
-  
+  if(!navigator.geolocation){statusEl.textContent='No disponible';return}
   btn.classList.add('loading');
-  statusEl.textContent='Buscando GPS...';
+  statusEl.textContent='Buscando...';
   
-  // Stop any previous watch
-  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
-  
-  // Always use high accuracy — wait for real GPS, not WiFi approximation
-  navigator.geolocation.getCurrentPosition(
-    function(p){
-      btn.classList.remove('loading');
-      // Reject positions with accuracy worse than 500m
-      if(p.coords.accuracy>500){
-        statusEl.textContent='Precisión baja ('+Math.round(p.coords.accuracy)+'m), esperando GPS...';
-        // Don't show bad position, go straight to watch for better one
-      } else {
-        updateUserPosition(p.coords.latitude,p.coords.longitude,p.coords.accuracy);
-      }
-      
-      // Watch for continuous updates — GPS gets more accurate over time
-      watchId=navigator.geolocation.watchPosition(
-        function(p2){
-          // Only update if accuracy is reasonable (<200m) or better than what we had
-          if(p2.coords.accuracy<500){
-            updateUserPosition(p2.coords.latitude,p2.coords.longitude,p2.coords.accuracy);
-            statusEl.textContent='Ubicación activa ✓ (±'+Math.round(p2.coords.accuracy)+'m)';
-          }
-        },
-        function(){},
-        {enableHighAccuracy:true,timeout:60000,maximumAge:5000}
-      );
-    },
-    function(err){
-      btn.classList.remove('loading');
-      if(err.code===1)statusEl.textContent='Permiso denegado — Ajustes > Safari > Ubicación';
-      else if(err.code===3)statusEl.textContent='GPS tardó demasiado. Prueba al aire libre.';
-      else statusEl.textContent='No se pudo obtener ubicación';
-    },
-    {enableHighAccuracy:true,timeout:30000,maximumAge:10000}
-  );
+  navigator.geolocation.getCurrentPosition(function(p){
+    btn.classList.remove('loading');
+    uLat=p.coords.latitude;
+    uLng=p.coords.longitude;
+    
+    // Remove old
+    if(uMarker){map.removeLayer(uMarker)}
+    if(uCircle){map.removeLayer(uCircle)}
+    
+    // User marker — added directly to map, NOT to cluster layer
+    uMarker=L.marker([uLat,uLng],{
+      icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),
+      zIndexOffset:9999,
+      interactive:false
+    }).addTo(map);
+    
+    // Radius circle
+    uCircle=L.circle([uLat,uLng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.05,weight:1.5,dashArray:'6 4',interactive:false}).addTo(map);
+    
+    map.setView([uLat,uLng],13);
+    statusEl.textContent='Ubicación OK ✓';
+    updateNearby();
+    if(window.innerWidth<=768)openSheet('nearby');
+    
+  },function(err){
+    btn.classList.remove('loading');
+    if(err.code===1)statusEl.textContent='Permiso denegado';
+    else statusEl.textContent='Error de ubicación';
+  },{enableHighAccuracy:true,timeout:30000,maximumAge:0});
 };
 
 function updateNearby(){
