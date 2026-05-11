@@ -106,7 +106,8 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 .pin:hover{transform:rotate(-45deg) scale(1.15)}
 .pin.pend{background:var(--gold)}.pin.visit{background:var(--green)}.pin.near{background:rgba(66,133,244,.75);border-color:rgba(255,255,255,.4);box-shadow:0 0 8px rgba(66,133,244,.4),0 2px 8px rgba(0,0,0,.35)}
 .pin-i{transform:rotate(45deg);font-size:11px;line-height:1;color:#fff}
-.user-dot{width:16px;height:16px;background:var(--blue);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(66,133,244,.3),0 2px 8px rgba(0,0,0,.3)}
+.user-dot{width:16px;height:16px;background:var(--blue);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(66,133,244,.3),0 2px 8px rgba(0,0,0,.3);animation:user-pulse 2s ease infinite}
+@keyframes user-pulse{0%,100%{box-shadow:0 0 0 4px rgba(66,133,244,.3),0 2px 8px rgba(0,0,0,.3)}50%{box-shadow:0 0 0 8px rgba(66,133,244,.15),0 2px 8px rgba(0,0,0,.3)}}
 
 /* ── POPUP ── */
 .leaflet-popup-content-wrapper{background:var(--card)!important;border-radius:14px!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important;border:1px solid var(--border)!important;padding:0!important}
@@ -135,8 +136,15 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 .stars-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 
 /* ── CLUSTERS ── */
-.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(204,153,51,.25)!important}
-.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:var(--gold)!important;color:#111!important;font-family:'DM Sans',sans-serif!important;font-weight:700!important;font-size:13px!important}
+.marker-cluster{background:none!important}
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:none!important}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{
+  background:var(--panel)!important;color:var(--gold2)!important;font-family:'DM Sans',sans-serif!important;font-weight:700!important;font-size:14px!important;
+  border:2px solid var(--gold)!important;border-radius:50%!important;box-shadow:0 2px 12px rgba(204,153,51,.3),0 0 0 4px rgba(204,153,51,.1)!important;
+  width:40px!important;height:40px!important;line-height:36px!important;text-align:center!important;margin-left:-20px!important;margin-top:-20px!important
+}
+.marker-cluster-medium div{border-color:var(--gold2)!important;width:46px!important;height:46px!important;line-height:42px!important;margin-left:-23px!important;margin-top:-23px!important;font-size:15px!important}
+.marker-cluster-large div{border-color:#e6b84d!important;width:52px!important;height:52px!important;line-height:48px!important;margin-left:-26px!important;margin-top:-26px!important;font-size:16px!important;box-shadow:0 2px 16px rgba(204,153,51,.4),0 0 0 6px rgba(204,153,51,.12)!important}
 
 /* ── GMAPS BUTTON ── */
 .pop-gmaps{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .15s}
@@ -253,19 +261,21 @@ const R=INITIAL_DATA.map((r,i)=>{const s=store[gk(r)]||{};return{...r,id:i,visit
 function saveR(r){store[gk(r)]={visitado:r.visitado,puntuacion:r.puntuacion};save()}
 
 // ── MAP ──
-const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true,maxZoom:18}).setView([39.5,-3],6);
+const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true,maxZoom:18,zoomSnap:0.5}).setView([39.8,-2.5],7);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:19}).addTo(map);
 
 // MarkerCluster for performance
 const ML=L.markerClusterGroup({
-  maxClusterRadius:50,
+  maxClusterRadius:40,
   spiderfyOnMaxZoom:true,
   showCoverageOnHover:false,
   chunkedLoading:true,
-  chunkInterval:100,
-  chunkDelay:10,
-  animate:false,
-  disableClusteringAtZoom:14
+  chunkInterval:80,
+  chunkDelay:5,
+  animate:true,
+  animateAddingMarkers:false,
+  disableClusteringAtZoom:11,
+  spiderfyDistanceMultiplier:1.5
 });
 map.addLayer(ML);
 let MK={};
@@ -444,42 +454,81 @@ function updateRankings(){
 }
 
 // ── GEOLOCATION ──
-var uLat=null,uLng=null,uMarker=null,uCircle=null,nbRadius=10;
+var uLat=null,uLng=null,uMarker=null,uCircle=null,uAccCircle=null,nbRadius=10,watchId=null;
 function haversine(a,b,c,d){var RR=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return RR*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
 
-window.locateMe=function(){
-  var btn=document.getElementById('locateBtn');btn.classList.add('loading');
-  var statusEl=document.getElementById('nbStatus');
-  if(!navigator.geolocation){btn.classList.remove('loading');statusEl.textContent='Geolocalización no disponible';return}
-  statusEl.textContent='Obteniendo ubicación...';
+function updateUserPosition(lat,lng,acc){
+  var firstTime=(uLat===null);
+  uLat=lat;uLng=lng;
   
-  // Try high accuracy first, fallback to low accuracy
-  function onSuccess(p){
-    uLat=p.coords.latitude;uLng=p.coords.longitude;btn.classList.remove('loading');
-    if(uMarker)map.removeLayer(uMarker);if(uCircle)map.removeLayer(uCircle);
-    uMarker=L.marker([uLat,uLng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map);
-    uCircle=L.circle([uLat,uLng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.06,weight:1.5,dashArray:'6 4'}).addTo(map);
-    map.setView([uLat,uLng],12);
-    statusEl.textContent='Ubicación detectada ✓ (±'+Math.round(p.coords.accuracy)+'m)';
-    updateNearby();
+  if(uMarker){uMarker.setLatLng([lat,lng])}
+  else{
+    uMarker=L.marker([lat,lng],{icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map);
+  }
+  
+  // Accuracy circle
+  if(uAccCircle){uAccCircle.setLatLng([lat,lng]);uAccCircle.setRadius(acc)}
+  else{
+    uAccCircle=L.circle([lat,lng],{radius:acc,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.08,weight:1,interactive:false}).addTo(map);
+  }
+  
+  // Nearby radius circle
+  if(uCircle){uCircle.setLatLng([lat,lng]);uCircle.setRadius(nbRadius*1000)}
+  else{
+    uCircle=L.circle([lat,lng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.04,weight:1.5,dashArray:'6 4',interactive:false}).addTo(map);
+  }
+  
+  if(firstTime){
+    map.setView([lat,lng],13);
+    document.getElementById('nbStatus').textContent='Ubicación activa ✓';
     if(window.innerWidth<=768)openSheet('nearby');
   }
-  function onError(err){
-    // If high accuracy failed, try without it
-    if(err.code===3){
-      navigator.geolocation.getCurrentPosition(onSuccess,function(err2){
-        btn.classList.remove('loading');
-        statusEl.textContent=err2.code===1?'Permiso denegado. Ve a Ajustes > Safari > Ubicación':'Error: '+err2.message;
-      },{enableHighAccuracy:false,timeout:20000,maximumAge:120000});
-      return;
-    }
-    btn.classList.remove('loading');
-    var msg='Error obteniendo ubicación';
-    if(err.code===1)msg='Permiso denegado. Ve a Ajustes > Safari > Ubicación';
-    if(err.code===2)msg='Ubicación no disponible';
-    statusEl.textContent=msg;
-  }
-  navigator.geolocation.getCurrentPosition(onSuccess,onError,{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+  
+  updateNearby();
+}
+
+window.locateMe=function(){
+  var btn=document.getElementById('locateBtn');
+  var statusEl=document.getElementById('nbStatus');
+  
+  if(!navigator.geolocation){statusEl.textContent='Geolocalización no disponible';return}
+  
+  btn.classList.add('loading');
+  statusEl.textContent='Buscando ubicación...';
+  
+  // Stop any previous watch
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+  
+  // First: get a quick position
+  navigator.geolocation.getCurrentPosition(
+    function(p){
+      btn.classList.remove('loading');
+      updateUserPosition(p.coords.latitude,p.coords.longitude,p.coords.accuracy);
+      
+      // Then: start watching for updates (better accuracy over time)
+      watchId=navigator.geolocation.watchPosition(
+        function(p2){updateUserPosition(p2.coords.latitude,p2.coords.longitude,p2.coords.accuracy)},
+        function(){},
+        {enableHighAccuracy:true,timeout:30000,maximumAge:10000}
+      );
+    },
+    function(err){
+      // Fallback: try without high accuracy
+      navigator.geolocation.getCurrentPosition(
+        function(p){
+          btn.classList.remove('loading');
+          updateUserPosition(p.coords.latitude,p.coords.longitude,p.coords.accuracy);
+        },
+        function(err2){
+          btn.classList.remove('loading');
+          if(err2.code===1)statusEl.textContent='Permiso denegado — Ajustes > Safari > Ubicación';
+          else statusEl.textContent='No se pudo obtener ubicación';
+        },
+        {enableHighAccuracy:false,timeout:20000,maximumAge:300000}
+      );
+    },
+    {enableHighAccuracy:true,timeout:8000,maximumAge:60000}
+  );
 };
 
 function updateNearby(){
