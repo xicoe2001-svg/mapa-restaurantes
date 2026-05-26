@@ -186,6 +186,7 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
   <button class="nav-btn" onclick="openSheet('list')"><span class="ico">📋</span>Lista</button>
   <button class="nav-btn" onclick="openSheet('nearby')"><span class="ico">📍</span>Cerca</button>
   <button class="nav-btn" onclick="openSheet('rankings')"><span class="ico">⭐</span>Rankings</button>
+  <button class="nav-btn" onclick="openSheet('add')"><span class="ico">➕</span>Añadir</button>
 </nav>
 
 <!-- OVERLAY -->
@@ -229,6 +230,43 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
       <button class="rk-tab" data-rk="value" onclick="setRkTab(this)">Calidad-Precio</button>
     </div>
     <div id="rkList"></div>
+  </div>
+</div>
+
+<!-- ADD SHEET -->
+<div class="sheet" id="sheet-add">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Añadir restaurante</div>
+  <div class="sheet-body">
+    <div class="f-section">
+      <div class="f-label">Nombre *</div>
+      <input class="f-search" id="addName" placeholder="Ej: Casa Pepe">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Ciudad *</div>
+      <input class="f-search" id="addCity" placeholder="Ej: Barcelona">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Dirección *</div>
+      <input class="f-search" id="addAddr" placeholder="Ej: Carrer de Blai, 42, 08004 Barcelona">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Tipo de cocina</div>
+      <input class="f-search" id="addType" placeholder="Ej: Tapas Bar, Seafood, Asador...">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Precio aprox. (€/persona)</div>
+      <input class="f-search" id="addPrice" type="number" placeholder="Ej: 40" inputmode="numeric">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Ubicación en Google Maps *</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.4">Abre el restaurante en Google Maps, pulsa "Compartir" → "Copiar enlace" y pégalo aquí</p>
+      <input class="f-search" id="addMaps" placeholder="Pega el enlace de Google Maps aquí">
+    </div>
+    <div class="f-section" style="padding-top:4px">
+      <button onclick="addRestaurant()" style="width:100%;padding:14px;background:var(--gold);color:#111;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">➕ Añadir al mapa</button>
+    </div>
+    <div id="addMsg" style="padding:0 16px 16px;font-size:13px;display:none"></div>
   </div>
 </div>
 
@@ -506,7 +544,7 @@ window.openSheet=function(name){
   closeSheet();
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active')});
   var btns=document.querySelectorAll('.nav-btn');
-  var idx={filters:0,list:1,nearby:2,rankings:3}[name];
+  var idx={filters:0,list:1,nearby:2,rankings:3,add:4}[name];
   if(btns[idx])btns[idx].classList.add('active');
   var s=document.getElementById('sheet-'+name);
   if(s){
@@ -524,6 +562,94 @@ window.closeSheet=function(){
   activeSheet=null;
 };
 
+// ── ADD RESTAURANT ──
+window.addRestaurant=function(){
+  var name=document.getElementById('addName').value.trim();
+  var city=document.getElementById('addCity').value.trim();
+  var addr=document.getElementById('addAddr').value.trim();
+  var type=document.getElementById('addType').value.trim()||'Spanish';
+  var price=parseFloat(document.getElementById('addPrice').value)||30;
+  var mapsLink=document.getElementById('addMaps').value.trim();
+  var msgEl=document.getElementById('addMsg');
+
+  if(!name||!city||!addr){
+    msgEl.style.display='block';msgEl.style.color='#e44';
+    msgEl.textContent='Rellena nombre, ciudad y dirección';return;
+  }
+
+  // Extract coords from Google Maps link
+  var lat=null,lng=null;
+
+  // Try patterns: @41.123,2.456 or q=41.123,2.456 or /41.123,2.456
+  var patterns=[
+    /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /\/(-?\d+\.\d{4,}),(-?\d+\.\d{4,})/,
+    /place\/[^\/]+\/(-?\d+\.?\d*),(-?\d+\.?\d*)/
+  ];
+
+  for(var i=0;i<patterns.length;i++){
+    var m=mapsLink.match(patterns[i]);
+    if(m){lat=parseFloat(m[1]);lng=parseFloat(m[2]);break}
+  }
+
+  // If no coords found from link, use city center as fallback
+  if(!lat||!lng||isNaN(lat)||isNaN(lng)){
+    // Try to find a restaurant in same city and use nearby coords
+    var sameCity=R.filter(function(r){return r.ciudad.toLowerCase()===city.toLowerCase()});
+    if(sameCity.length>0){
+      lat=sameCity[0].lat+0.001*(Math.random()-0.5);
+      lng=sameCity[0].lng+0.001*(Math.random()-0.5);
+      msgEl.style.display='block';msgEl.style.color='var(--gold2)';
+      msgEl.textContent='⚠️ No se pudieron extraer coordenadas del enlace. Se usó ubicación aproximada de '+city+'. El link de Google Maps sí funcionará bien.';
+    }else{
+      lat=40.0;lng=-3.0;
+      msgEl.style.display='block';msgEl.style.color='#e44';
+      msgEl.textContent='No se encontraron coordenadas. Pega un enlace de Google Maps válido.';
+      return;
+    }
+  }else{
+    msgEl.style.display='block';msgEl.style.color='var(--green)';
+    msgEl.textContent='✅ '+name+' añadido correctamente!';
+  }
+
+  // Create new restaurant
+  var newR={
+    nombre:name,tipo:type,ciudad:city,direccion:addr,
+    lat:lat,lng:lng,precio:price,id:R.length,visitado:false,puntuacion:0
+  };
+  R.push(newR);
+
+  // Save to localStorage
+  saveR(newR);
+  // Also save the full new restaurant data
+  var customKey='custom_restaurants';
+  var custom=[];
+  try{var raw=localStorage.getItem(customKey);if(raw)custom=JSON.parse(raw)}catch(e){}
+  custom.push({nombre:name,tipo:type,ciudad:city,direccion:addr,lat:lat,lng:lng,precio:price});
+  try{localStorage.setItem(customKey,JSON.stringify(custom))}catch(e){}
+
+  // Add marker
+  var mk=L.marker([lat,lng],{icon:mkIcon(false,false)});
+  mk.on('click',function(){if(!mk.getPopup()){mk.bindPopup(popHTML(newR),{maxWidth:280,minWidth:250});mk.openPopup()}});
+  MK[newR.id]=mk;
+  ML.addLayer(mk);
+
+  // Clear form
+  document.getElementById('addName').value='';
+  document.getElementById('addCity').value='';
+  document.getElementById('addAddr').value='';
+  document.getElementById('addType').value='';
+  document.getElementById('addPrice').value='';
+  document.getElementById('addMaps').value='';
+
+  // Refresh filters and lists
+  refresh();
+
+  // Fly to new marker
+  setTimeout(function(){map.setView([lat,lng],14)},500);
+};
+
 function refresh(){applyFilters();updateNearby();updateRankings()}
 
 // ── INIT ──
@@ -533,6 +659,23 @@ var mf=document.getElementById('mobileFilters');if(mf)mf.innerHTML=filterHTML;
 var df=document.getElementById('deskFilters');if(df)df.innerHTML=filterHTML;
 
 // Initial render
+// Load custom restaurants from localStorage
+try{
+  var customRaw=localStorage.getItem('custom_restaurants');
+  if(customRaw){
+    var custom=JSON.parse(customRaw);
+    custom.forEach(function(c){
+      var s=store[c.nombre+'|'+c.ciudad]||{};
+      var newR={nombre:c.nombre,tipo:c.tipo,ciudad:c.ciudad,direccion:c.direccion,lat:c.lat,lng:c.lng,precio:c.precio,id:R.length,visitado:s.visitado||false,puntuacion:s.puntuacion||0};
+      R.push(newR);
+      var mk=L.marker([newR.lat,newR.lng],{icon:mkIcon(newR.visitado,false)});
+      mk.on('click',function(){if(!mk.getPopup()){mk.bindPopup(popHTML(newR),{maxWidth:280,minWidth:250});mk.openPopup()}});
+      MK[newR.id]=mk;
+      ML.addLayer(mk);
+    });
+  }
+}catch(e){}
+
 applyFilters();
 updateNearby();
 updateRankings();
