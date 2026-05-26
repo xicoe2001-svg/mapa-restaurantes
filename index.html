@@ -25,9 +25,9 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 #map{width:100%;height:100%}
 
 /* ── MAP BUTTONS ── */
-.map-btn{position:absolute;z-index:900;width:52px;height:52px;border-radius:14px;border:none;background:var(--panel);color:var(--txt);font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.6);cursor:pointer;transition:background .15s}
+.map-btn{position:fixed;z-index:950;width:52px;height:52px;border-radius:14px;border:none;background:var(--panel);color:var(--txt);font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.6);cursor:pointer;transition:background .15s}
 .map-btn:active{background:var(--card)}
-#locateBtn{bottom:80px;right:14px}
+#locateBtn{bottom:76px;right:14px}
 #locateBtn.loading{animation:pulse .8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -155,12 +155,13 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
   .desk-filters .f-clear{width:100%;margin:0 0 14px}
   .desk-bottom{border-top:1px solid var(--border);max-height:300px;overflow-y:auto}
   .map-wrap{flex:1;position:relative}
-  #locateBtn{bottom:30px;right:14px}
+  #locateBtn{bottom:30px;right:14px;position:absolute}
   .sheet,.sheet-overlay{display:none!important}
 }
 @media(max-width:768px){
   .sidebar-desk{display:none!important}
   .map-wrap{width:100%;height:100%}
+  #locateBtn{bottom:calc(76px + env(safe-area-inset-bottom, 0px));right:14px}
 }
 </style>
 </head>
@@ -252,7 +253,7 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
     </div>
     <div class="f-section">
       <div class="f-label">Tipo de cocina</div>
-      <input class="f-search" id="addType" placeholder="Ej: Tapas Bar, Seafood, Asador...">
+      <select class="f-select" id="addType"><option value="">Selecciona tipo...</option></select>
     </div>
     <div class="f-section">
       <div class="f-label">Precio aprox. (€/persona)</div>
@@ -679,6 +680,13 @@ try{
 applyFilters();
 updateNearby();
 updateRankings();
+
+// Populate add-type dropdown
+var addTypeEl=document.getElementById('addType');
+if(addTypeEl){
+  var types=[...new Set(R.map(function(r){return r.tipo}))].sort();
+  types.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;addTypeEl.appendChild(o)});
+}
 
 // Fix Leaflet size on mobile after everything loads
 setTimeout(function(){map.invalidateSize()},100);
