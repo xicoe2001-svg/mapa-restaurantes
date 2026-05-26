@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111114">
+<title>Mapa Gastronómico</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#111114;--panel:#1a1a1f;--card:#222228;--input:#2a2a32;
+  --border:#2e2e36;--txt:#eae6de;--txt2:#9a9a9f;--muted:#5a5a62;
+  --gold:#CC9933;--gold2:#e6b84d;--green:#2d9e2d;--blue:#4285F4;
+  --radius:12px;
+}
+html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--txt)}
+
+/* ── LAYOUT ── */
+.app{position:relative;width:100%;height:100dvh;height:100vh}
+#map{width:100%;height:100%}
+
+/* ── MAP BUTTONS ── */
+.map-btn{position:absolute;z-index:900;width:52px;height:52px;border-radius:14px;border:none;background:var(--panel);color:var(--txt);font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.6);cursor:pointer;transition:background .15s}
+.map-btn:active{background:var(--card)}
+#locateBtn{bottom:80px;right:14px}
+#locateBtn.loading{animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:900;display:flex;background:var(--panel);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0)}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 0 6px;border:none;background:none;color:var(--muted);font-family:inherit;font-size:10px;font-weight:500;cursor:pointer;transition:color .15s}
+.nav-btn.active{color:var(--gold2)}
+.nav-btn .ico{font-size:20px;line-height:1}
+
+/* ── BOTTOM SHEET ── */
+.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;opacity:0;pointer-events:none;transition:opacity .25s}
+.sheet-overlay.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:var(--panel);border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);max-height:80dvh;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
+.sheet.on{transform:translateY(0)}
+.sheet-handle{padding:10px 0 6px;text-align:center;cursor:grab;flex-shrink:0}
+.sheet-handle::before{content:'';display:inline-block;width:36px;height:4px;background:var(--border);border-radius:2px}
+.sheet-title{padding:0 20px 12px;font-size:17px;font-weight:700;flex-shrink:0}
+.sheet-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* ── FILTERS SHEET ── */
+.f-section{padding:0 16px 14px}
+.f-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:6px}
+.f-search{width:100%;padding:11px 12px 11px 36px;background:var(--input);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:16px;font-family:inherit;outline:none}
+.f-search:focus{border-color:var(--gold)}
+.f-search-wrap{position:relative}
+.f-search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px}
+.f-select{width:100%;padding:11px 12px;background:var(--input);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:15px;font-family:inherit;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a5a62' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.f-select option{background:var(--card);color:var(--txt)}
+.f-pills{display:flex;gap:6px}
+.f-pill{flex:1;padding:10px 4px;border-radius:10px;border:1px solid var(--border);background:var(--input);color:var(--txt2);font-size:13px;font-weight:500;text-align:center;cursor:pointer;font-family:inherit;transition:all .15s}
+.f-pill.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:600}
+.f-price-val{text-align:center;font-size:20px;font-weight:700;color:var(--gold2);margin-bottom:6px}
+.f-range{width:100%;-webkit-appearance:none;height:6px;background:var(--input);border-radius:3px;outline:none}
+.f-range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--gold);border:3px solid var(--panel);box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.f-range::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--gold);border:3px solid var(--panel)}
+.f-minmax{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px}
+.f-stats{display:flex;gap:12px;padding:10px 16px;background:var(--card);border-radius:10px;margin:0 16px 14px;font-size:12px;color:var(--txt2)}
+.f-stats span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.f-stats .s-pend::before{background:var(--gold)}
+.f-stats .s-visit::before{background:var(--green)}
+.f-stats .s-show::before{background:var(--txt2)}
+.f-clear{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:10px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--txt2);font-size:12px;font-family:inherit;cursor:pointer}
+
+/* ── LIST ITEMS ── */
+.li{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s;min-height:52px}
+.li:active{background:var(--card)}
+.li-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.li-info{flex:1;min-width:0}
+.li-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-meta{font-size:11px;color:var(--muted);margin-top:1px}
+.li-right{font-size:13px;font-weight:600;color:var(--gold2);flex-shrink:0}
+.li-empty{padding:24px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}
+
+/* ── NEARBY SHEET ── */
+.nb-controls{padding:12px 16px 16px;background:var(--card);border-radius:0 0 12px 12px;margin:0 12px 8px;border:1px solid var(--border)}
+.nb-radius{text-align:center;font-size:20px;font-weight:700;color:var(--blue);margin-bottom:10px}
+.nb-range{width:100%;-webkit-appearance:none;height:8px;background:linear-gradient(to right,var(--blue) 0%,var(--input) 0%);border-radius:4px;outline:none;margin:4px 0}
+.nb-range::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:var(--blue);border:3px solid var(--panel);box-shadow:0 2px 10px rgba(66,133,244,.5)}
+.nb-range::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:var(--blue);border:3px solid var(--panel);box-shadow:0 2px 10px rgba(66,133,244,.5)}
+.nb-status{text-align:center;font-size:11px;color:var(--muted);margin-top:6px}
+.nb-dist{font-size:11px;font-weight:700;color:var(--blue);width:48px;text-align:center;flex-shrink:0}
+
+/* ── RANKINGS SHEET ── */
+.rk-tabs{display:flex;border-bottom:1px solid var(--border)}
+.rk-tab{flex:1;padding:10px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:center}
+.rk-tab.on{color:var(--gold2);border-bottom-color:var(--gold)}
+.rk-pos{font-size:14px;font-weight:700;color:var(--muted);width:24px;text-align:center;flex-shrink:0}
+.rk-pos.p1{color:#e6b84d}.rk-pos.p2{color:#b0b0b0}.rk-pos.p3{color:#cd7f32}
+
+/* ── MARKERS ── */
+.custom-marker{display:flex;align-items:center;justify-content:center}
+.pin{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.25);transition:transform .2s}
+.pin:hover{transform:rotate(-45deg) scale(1.15)}
+.pin.pend{background:var(--gold)}.pin.visit{background:var(--green)}.pin.near{background:rgba(66,133,244,.75);border-color:rgba(255,255,255,.4);box-shadow:0 0 8px rgba(66,133,244,.4),0 2px 8px rgba(0,0,0,.35)}
+.pin-i{transform:rotate(45deg);font-size:11px;line-height:1;color:#fff}
+.user-dot{width:16px;height:16px;background:var(--blue);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(66,133,244,.3),0 2px 8px rgba(0,0,0,.3);animation:user-pulse 2s ease infinite}
+@keyframes user-pulse{0%,100%{box-shadow:0 0 0 4px rgba(66,133,244,.3),0 2px 8px rgba(0,0,0,.3)}50%{box-shadow:0 0 0 8px rgba(66,133,244,.15),0 2px 8px rgba(0,0,0,.3)}}
+
+/* ── POPUP ── */
+.leaflet-popup-content-wrapper{background:var(--card)!important;border-radius:14px!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important;border:1px solid var(--border)!important;padding:0!important}
+.leaflet-popup-content{margin:0!important;width:260px!important;color:var(--txt)!important;font-family:'DM Sans',sans-serif!important}
+.leaflet-popup-tip{background:var(--card)!important;border:1px solid var(--border)!important;box-shadow:none!important}
+.leaflet-popup-close-button{color:var(--muted)!important;font-size:20px!important;top:6px!important;right:8px!important}
+.pop{padding:16px}
+.pop-name{font-size:17px;font-weight:700;margin-bottom:2px;padding-right:20px;line-height:1.2}
+.pop-type{font-size:11px;color:var(--gold2);font-weight:500;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+.pop-det{font-size:11px;color:var(--txt2);margin-bottom:3px;display:flex;gap:6px}
+.pop-det-ico{flex-shrink:0;width:14px;text-align:center}
+.pop-price{display:inline-block;background:rgba(204,153,51,.12);color:var(--gold2);padding:4px 12px;border-radius:20px;font-size:14px;font-weight:700;margin-top:8px}
+.pop-hr{height:1px;background:var(--border);margin:12px 0}
+.pop-toggle{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.pop-toggle-label{font-size:13px;font-weight:500}
+.tgl{position:relative;width:46px;height:26px;cursor:pointer;display:inline-block}
+.tgl input{display:none}
+.tgl-s{position:absolute;inset:0;background:var(--input);border-radius:13px;border:1px solid var(--border);transition:all .25s}
+.tgl-s::before{content:'';position:absolute;width:20px;height:20px;border-radius:50%;background:var(--muted);top:2px;left:2px;transition:all .25s}
+.tgl input:checked+.tgl-s{background:var(--green);border-color:var(--green)}
+.tgl input:checked+.tgl-s::before{transform:translateX(20px);background:#fff}
+.stars{display:flex;gap:3px;margin-top:4px}
+.star{background:none;border:none;font-size:22px;cursor:pointer;color:var(--input);padding:0;line-height:1;transition:color .1s}
+.star.on{color:var(--gold)}
+.star.off{opacity:.3;cursor:not-allowed}
+.stars-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+
+/* ── GMAPS BUTTON ── */
+.pop-gmaps{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .15s}
+.pop-gmaps:active{background:#1557b0}
+
+/* ── LEAFLET TWEAKS ── */
+.leaflet-control-zoom a{background:var(--card)!important;color:var(--txt)!important;border-color:var(--border)!important}
+.leaflet-control-attribution{background:rgba(17,17,20,.8)!important;color:var(--muted)!important;font-size:8px!important}
+.leaflet-control-attribution a{color:var(--txt2)!important}
+
+/* ── DESKTOP ── */
+@media(min-width:769px){
+  .bottom-nav{display:none}
+  .app{display:flex}
+  .sidebar-desk{display:flex!important;flex-direction:column;width:360px;min-width:360px;background:var(--panel);border-right:1px solid var(--border);overflow:hidden;z-index:800}
+  .desk-head{padding:20px 20px 14px;border-bottom:1px solid var(--border)}
+  .desk-head h1{font-size:20px;font-weight:700}
+  .desk-head p{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
+  .desk-filters{padding:14px 20px;overflow-y:auto;flex:1}
+  .desk-filters .f-section{padding:0 0 14px}
+  .desk-filters .f-stats{margin:0 0 14px}
+  .desk-filters .f-clear{width:100%;margin:0 0 14px}
+  .desk-bottom{border-top:1px solid var(--border);max-height:300px;overflow-y:auto}
+  .map-wrap{flex:1;position:relative}
+  #locateBtn{bottom:30px;right:14px}
+  .sheet,.sheet-overlay{display:none!important}
+}
+@media(max-width:768px){
+  .sidebar-desk{display:none!important}
+  .map-wrap{width:100%;height:100%}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- DESKTOP SIDEBAR -->
+<div class="sidebar-desk" id="deskSidebar">
+  <div class="desk-head"><h1>🍽 Mapa Gastronómico</h1><p>Tu guía personal</p></div>
+  <div class="desk-filters" id="deskFilters"></div>
+  <div class="desk-bottom" id="deskList"></div>
+</div>
+
+<!-- MAP -->
+<div class="map-wrap">
+  <div id="map"></div>
+  <button class="map-btn" id="locateBtn" onclick="locateMe()" title="Mi ubicación">📍</button>
+</div>
+
+<!-- MOBILE NAV -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="nav-btn active" onclick="openSheet('filters')"><span class="ico">⚙️</span>Filtros</button>
+  <button class="nav-btn" onclick="openSheet('list')"><span class="ico">📋</span>Lista</button>
+  <button class="nav-btn" onclick="openSheet('nearby')"><span class="ico">📍</span>Cerca</button>
+  <button class="nav-btn" onclick="openSheet('rankings')"><span class="ico">⭐</span>Rankings</button>
+  <button class="nav-btn" onclick="openSheet('add')"><span class="ico">➕</span>Añadir</button>
+</nav>
+
+<!-- OVERLAY -->
+<div class="sheet-overlay" id="overlay" onclick="closeSheet()"></div>
+
+<!-- FILTERS SHEET -->
+<div class="sheet" id="sheet-filters">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Filtros</div>
+  <div class="sheet-body" id="mobileFilters"></div>
+</div>
+
+<!-- LIST SHEET -->
+<div class="sheet" id="sheet-list">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Restaurantes</div>
+  <div class="sheet-body" id="mobileList"></div>
+</div>
+
+<!-- NEARBY SHEET -->
+<div class="sheet" id="sheet-nearby">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Cerca de ti</div>
+  <div class="sheet-body">
+    <div class="nb-controls">
+      <div class="nb-radius" id="nbRadiusDisplay">Radio: 10 km</div>
+      <input type="range" class="nb-range" id="nbRange" min="1" max="50" value="10">
+      <div class="nb-status" id="nbStatus">Pulsa 📍 en el mapa para activar</div>
+    </div>
+    <div id="nearbyList"></div>
+  </div>
+</div>
+
+<!-- RANKINGS SHEET -->
+<div class="sheet" id="sheet-rankings">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Rankings</div>
+  <div class="sheet-body">
+    <div class="rk-tabs">
+      <button class="rk-tab on" data-rk="top" onclick="setRkTab(this)">Mejor valorados</button>
+      <button class="rk-tab" data-rk="value" onclick="setRkTab(this)">Calidad-Precio</button>
+    </div>
+    <div id="rkList"></div>
+  </div>
+</div>
+
+<!-- ADD SHEET -->
+<div class="sheet" id="sheet-add">
+  <div class="sheet-handle" onclick="closeSheet()"></div>
+  <div class="sheet-title">Añadir restaurante</div>
+  <div class="sheet-body">
+    <div class="f-section">
+      <div class="f-label">Nombre *</div>
+      <input class="f-search" id="addName" placeholder="Ej: Casa Pepe">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Ciudad *</div>
+      <input class="f-search" id="addCity" placeholder="Ej: Barcelona">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Dirección *</div>
+      <input class="f-search" id="addAddr" placeholder="Ej: Carrer de Blai, 42, 08004 Barcelona">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Tipo de cocina</div>
+      <input class="f-search" id="addType" placeholder="Ej: Tapas Bar, Seafood, Asador...">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Precio aprox. (€/persona)</div>
+      <input class="f-search" id="addPrice" type="number" placeholder="Ej: 40" inputmode="numeric">
+    </div>
+    <div class="f-section">
+      <div class="f-label">Ubicación en Google Maps *</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.4">Abre el restaurante en Google Maps, pulsa "Compartir" → "Copiar enlace" y pégalo aquí</p>
+      <input class="f-search" id="addMaps" placeholder="Pega el enlace de Google Maps aquí">
+    </div>
+    <div class="f-section" style="padding-top:4px">
+      <button onclick="addRestaurant()" style="width:100%;padding:14px;background:var(--gold);color:#111;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">➕ Añadir al mapa</button>
+    </div>
+    <div id="addMsg" style="padding:0 16px 16px;font-size:13px;display:none"></div>
+  </div>
+</div>
+
+</div>
+<script>
+const INITIAL_DATA = [{"nombre":"Los Marinos Jose","tipo":"Marisquería","ciudad":"Fuengirola","direccion":"Paseo Marítimo Rey de España, 161, 29640 Fuengirola, Málaga","lat":36.5359,"lng":-4.62265,"precio":100},{"nombre":"D'Berto","tipo":"Marisquería","ciudad":"O Grove","direccion":"Calle Teniente Domínguez, 84, 36980 O Grove, Pontevedra","lat":42.48471,"lng":-8.86084,"precio":80},{"nombre":"Elkano","tipo":"Asador - Seafood","ciudad":"Getaria","direccion":"Herrerieta Kalea, 2, 20808 Getaria, Gipuzkoa","lat":43.303,"lng":-2.20499,"precio":100},{"nombre":"Mannix","tipo":"Asador - Lamb","ciudad":"Campaspero","direccion":"Calle Felipe II, 26, 47310 Campaspero, Valladolid","lat":41.49212,"lng":-4.19592,"precio":50},{"nombre":"Güeyu Mar","tipo":"Seafood Asador","ciudad":"Ribadesella","direccion":"Playa de Vega, 84, 33560 Ribadesella, Asturias","lat":43.46818,"lng":-5.13034,"precio":70},{"nombre":"Alameda","tipo":"Asador - Steak","ciudad":"Fuenmayor","direccion":"Calle Menéndez Pelayo, 11, 26360 Fuenmayor, La Rioja","lat":42.46712,"lng":-2.56129,"precio":60},{"nombre":"Askua","tipo":"Asador - Steak","ciudad":"València","direccion":"Calle Félix Pizcueta, 9, 46004 València","lat":39.4691,"lng":-0.3781,"precio":70},{"nombre":"Hermanos Alba","tipo":"Seafood","ciudad":"Málaga","direccion":"Calle Compositor Lehmberg Ruiz, 18, 29007 Málaga","lat":36.71796,"lng":-4.4327,"precio":50},{"nombre":"Kaia Kaipe","tipo":"Seafood Asador","ciudad":"Getaria","direccion":"General Arnao Kalea, 4, 20808 Getaria, Gipuzkoa","lat":43.30468,"lng":-2.20333,"precio":90},{"nombre":"El Capriccho","tipo":"Asador","ciudad":"Jiminez de Jamuz","direccion":"Calle Camino, 5, 24763 Jiménez de Jamuz, León","lat":42.26292,"lng":-5.93129,"precio":45},{"nombre":"Bar FM","tipo":"Seafood Small Plates","ciudad":"Granada","direccion":"Calle Pescadería, 8, 18001 Granada","lat":37.1766,"lng":-3.5991,"precio":30},{"nombre":"Casa Julián","tipo":"Asador - Steak","ciudad":"Tolosa","direccion":"Santa Clara Kalea, 6, 20400 Tolosa, Gipuzkoa","lat":43.13526,"lng":-2.07239,"precio":80},{"nombre":"Hormo Onda","tipo":"Asador","ciudad":"Larrabetzu","direccion":"Bideko Kalea, 3, 48195 Larrabetzu, Bizkaia","lat":43.233,"lng":-2.732,"precio":55},{"nombre":"Ganbara","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle San Jerónimo, 21, 20003 Donostia-San Sebastián","lat":43.3234,"lng":-1.98553,"precio":35},{"nombre":"El Faralló","tipo":"Marisquería","ciudad":"Dénia","direccion":"Camí Major de Dénia, 17, 03700 Dénia, Alicante","lat":38.83365,"lng":0.13406,"precio":60},{"nombre":"Chiringuito El Saladero","tipo":"Seafood","ciudad":"Caleta de Vélez","direccion":"Paseo Marítimo El Saladero, s/n, 29751 Caleta de Vélez, Málaga","lat":36.775,"lng":-4.135,"precio":35},{"nombre":"Ibai","tipo":"Asador","ciudad":"San Sebastián","direccion":"Calle Iparraguirre, 28, 20006 Donostia-San Sebastián","lat":43.31828,"lng":-1.98055,"precio":70},{"nombre":"Casa Carmela","tipo":"Paella","ciudad":"València","direccion":"Calle Isabel de Villena, 155, 46011 València","lat":39.4553,"lng":-0.3302,"precio":45},{"nombre":"RiasKru","tipo":"Seafood","ciudad":"Barcelona","direccion":"Calle Provença, 242, 08008 Barcelona","lat":41.37424,"lng":2.15455,"precio":65},{"nombre":"Cañabota","tipo":"Seafood","ciudad":"Seville","direccion":"Calle Orfila, 5, 41003 Sevilla","lat":37.39341,"lng":-5.99352,"precio":70},{"nombre":"Passadis des Pep","tipo":"Seafood","ciudad":"Barcelona","direccion":"Pla de Palau, 2, 08003 Barcelona","lat":41.38296,"lng":2.18254,"precio":75},{"nombre":"Compartir","tipo":"Spanish","ciudad":"Barcelona","direccion":"Calle Valencia, 225, 08007 Barcelona","lat":41.3912,"lng":2.16109,"precio":60},{"nombre":"Casa Balbino","tipo":"Tapas Bar","ciudad":"Sanlúcar de Barrameda","direccion":"Plaza del Cabildo, 14, 11540 Sanlúcar de Barrameda, Cádiz","lat":36.77903,"lng":-6.35456,"precio":25},{"nombre":"Antonio Bar","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle Bergara, 3, 20003 Donostia-San Sebastián","lat":43.31966,"lng":-1.98056,"precio":30},{"nombre":"Villa Más","tipo":"Catalan","ciudad":"Sant Feliu de Guíxols","direccion":"Passeig del Mar, 18, 17220 Sant Feliu de Guíxols, Girona","lat":41.78161,"lng":3.03165,"precio":65},{"nombre":"Jaylu","tipo":"Marisquería","ciudad":"Seville","direccion":"Calle Harinas, 2, 41001 Sevilla","lat":37.38734,"lng":-5.99563,"precio":45},{"nombre":"Ca Joan","tipo":"Asador - Steak","ciudad":"Altea","direccion":"Calle Masnou de Dalt, 1, 03590 Altea, Alicante","lat":38.61573,"lng":-0.03315,"precio":80},{"nombre":"Rekondo","tipo":"Asador","ciudad":"San Sebastián","direccion":"Paseo de Igeldo, 57, 20008 Donostia-San Sebastián","lat":43.306,"lng":-2.005,"precio":70},{"nombre":"Bidea2","tipo":"Asador","ciudad":"Cizur Menor","direccion":"Camino de Galar, s/n, 31190 Cizur Menor, Navarra","lat":42.78112,"lng":-1.68036,"precio":55},{"nombre":"La Castillería","tipo":"Asador - Steak","ciudad":"Vejer de la Frontera","direccion":"Cortijo La Barca, Ctra. A-2230, 11150 Vejer de la Frontera, Cádiz","lat":36.26846,"lng":-5.97477,"precio":60},{"nombre":"Restaurante Elías","tipo":"Paella","ciudad":"Xinorlet","direccion":"Carrer Llevant, 2, 03648 Xinorlet, Alicante","lat":38.41534,"lng":-0.96053,"precio":40},{"nombre":"Can Valles","tipo":"Spanish","ciudad":"Barcelona","direccion":"Calle Enric Granados, 83, 08008 Barcelona","lat":41.38209,"lng":2.15118,"precio":45},{"nombre":"Sips","tipo":"Cocktail Bar","ciudad":"Barcelona","direccion":"Carrer del Consell de Cent, 70, 08015 Barcelona","lat":41.37897,"lng":2.15011,"precio":20},{"nombre":"Echaurren","tipo":"Spanish","ciudad":"Ezcaray","direccion":"Calle Padre José García, 19, 26280 Ezcaray, La Rioja","lat":42.32556,"lng":-3.01461,"precio":70},{"nombre":"El Quim","tipo":"Catalan","ciudad":"Barcelona","direccion":"Mercat de la Boqueria, Loc. 584-586, 08001 Barcelona","lat":41.38195,"lng":2.17217,"precio":35},{"nombre":"El Faro de Cádiz","tipo":"Tapas Bar","ciudad":"Cádiz","direccion":"Calle San Félix, 15, 11001 Cádiz","lat":36.52858,"lng":-6.30382,"precio":40},{"nombre":"Cal Pep","tipo":"Seafood Tapas","ciudad":"Barcelona","direccion":"Plaça de les Olles, 8, 08003 Barcelona","lat":41.38394,"lng":2.18333,"precio":50},{"nombre":"Bodega Cigalena","tipo":"Spanish","ciudad":"Santander","direccion":"Calle Daoíz y Velarde, 19, 39003 Santander, Cantabria","lat":43.46322,"lng":-3.80081,"precio":40},{"nombre":"Asador Epeleta","tipo":"Asador","ciudad":"Lekumberri","direccion":"Calle Navarra, 13, 31870 Lekunberri, Navarra","lat":43.00011,"lng":-1.88972,"precio":55},{"nombre":"Rausell","tipo":"Spanish","ciudad":"València","direccion":"Calle Músico Peydró, 11, 46001 València","lat":39.47203,"lng":-0.37818,"precio":35},{"nombre":"Casa Revuelta","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Latoneros, 3, 28005 Madrid","lat":40.41392,"lng":-3.70783,"precio":25},{"nombre":"La Cova Fumada","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer del Baluard, 56, 08003 Barcelona","lat":41.3793,"lng":2.18919,"precio":25},{"nombre":"RavioXO","tipo":"Asian Fusion","ciudad":"Madrid","direccion":"Calle del Padre Damián, 23, 28036 Madrid","lat":40.4578,"lng":-3.68595,"precio":75},{"nombre":"Llisa Negra","tipo":"Spanish","ciudad":"València","direccion":"Carrer del Mestre Gozalbo, 8, 46005 València","lat":39.46585,"lng":-0.36983,"precio":60},{"nombre":"Restaurante Tánicos","tipo":"Mediterranean","ciudad":"Fuengirola","direccion":"Urb. Las Rampas, Calle Blas Infante, 1, 29640 Fuengirola, Málaga","lat":36.538,"lng":-4.626,"precio":45},{"nombre":"Casa Urola","tipo":"Basque","ciudad":"San Sebastián","direccion":"Fermín Calbetón, 20, 20003 Donostia-San Sebastián","lat":43.32335,"lng":-1.98447,"precio":55},{"nombre":"Cuchara de San Telmo","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle 31 de Agosto, 28, 20003 Donostia-San Sebastián","lat":43.3245,"lng":-1.9853,"precio":30},{"nombre":"Bar Nestor","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle Pescadería, 11, 20003 Donostia-San Sebastián","lat":43.32391,"lng":-1.98371,"precio":25},{"nombre":"Casa Manolo","tipo":"Seafood","ciudad":"Daimús","direccion":"Carrer de la Mediterrània, 1, 46710 Daimús, València","lat":38.97527,"lng":-0.14058,"precio":60},{"nombre":"Casa Cámara","tipo":"Basque Seafood","ciudad":"Pasai Donibane","direccion":"Calle San Juan, 79, 20110 Pasaia, Gipuzkoa","lat":43.32659,"lng":-1.91989,"precio":70},{"nombre":"Nairod","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer del Parlament, 35, 08015 Barcelona","lat":41.37677,"lng":2.16278,"precio":45},{"nombre":"Asador Hondartzape","tipo":"Asador","ciudad":"Plentzia","direccion":"Bide Nagusia, 7, 48620 Plentzia, Bizkaia","lat":43.4035,"lng":-2.9502,"precio":55},{"nombre":"Fismuler","tipo":"Natural Wine Bar","ciudad":"Madrid","direccion":"Calle de Hartzenbusch, 12, 28010 Madrid","lat":40.43037,"lng":-3.70167,"precio":55},{"nombre":"Compartir","tipo":"Catalan","ciudad":"Cadaqués","direccion":"Carrer de la Riera, 1, 17488 Cadaqués, Girona","lat":42.28934,"lng":3.27602,"precio":65},{"nombre":"Narru","tipo":"Basque","ciudad":"San Sebastián","direccion":"Calle Zubieta, 56, 20007 Donostia-San Sebastián","lat":43.31569,"lng":-1.98787,"precio":60},{"nombre":"La Viña","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle 31 de Agosto, 3, 20003 Donostia-San Sebastián","lat":43.32435,"lng":-1.98485,"precio":20},{"nombre":"Taberna Laredo","tipo":"Spanish - Wine Bar","ciudad":"Madrid","direccion":"Calle de la Ruda, 5, 28005 Madrid","lat":40.41032,"lng":-3.70764,"precio":40},{"nombre":"La Bodeguilla","tipo":"Wine Bar","ciudad":"Palma","direccion":"Carrer de Jaume II, 7, 07012 Palma de Mallorca","lat":39.57012,"lng":2.64992,"precio":35},{"nombre":"Bar Bergara","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"General Artetxe Kalea, 8, 20001 Donostia-San Sebastián","lat":43.32436,"lng":-1.97237,"precio":25},{"nombre":"Bonanova","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer del Santíssim, 10, 08022 Barcelona","lat":41.40614,"lng":2.13291,"precio":50},{"nombre":"Borda Berri","tipo":"Progressive Tapas","ciudad":"San Sebastián","direccion":"Fermín Calbetón, 12, 20003 Donostia-San Sebastián","lat":43.32348,"lng":-1.98382,"precio":30},{"nombre":"Sacha Botilleria y Fogon","tipo":"Bistro","ciudad":"Madrid","direccion":"Calle de Juan Hurtado de Mendoza, 11, 28036 Madrid","lat":40.46053,"lng":-3.68701,"precio":65},{"nombre":"Lhardy","tipo":"Spanish","ciudad":"Madrid","direccion":"Carrera de San Jerónimo, 8, 28014 Madrid","lat":40.41662,"lng":-3.70138,"precio":60},{"nombre":"Gunea","tipo":"Creative Cuisine","ciudad":"Avilé","direccion":"Calle La Fruta, 4, 33400 Avilés, Asturias","lat":43.55592,"lng":-5.9223,"precio":55},{"nombre":"Lalola Taberna Gourmet","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Sagasta, 10, 41001 Sevilla","lat":37.39025,"lng":-5.99361,"precio":35},{"nombre":"Restaurante Gandarias","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle 31 de Agosto, 23, 20003 Donostia-San Sebastián","lat":43.32397,"lng":-1.98586,"precio":35},{"nombre":"La Cepa","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle 31 de Agosto, 7, 20003 Donostia-San Sebastián","lat":43.32432,"lng":-1.98492,"precio":30},{"nombre":"Casa Bigote","tipo":"Marisquería","ciudad":"Sanlúcar de Barrameda","direccion":"Bajo de Guía, s/n, 11540 Sanlúcar de Barrameda, Cádiz","lat":36.7892,"lng":-6.35145,"precio":50},{"nombre":"Etxanobe","tipo":"Seafood","ciudad":"Bilbao","direccion":"Avenida de Abandoibarra, 2, 48011 Bilbao, Bizkaia","lat":43.2682,"lng":-2.9411,"precio":75},{"nombre":"Kutral por Martin Abramzon","tipo":"Argentinian Steakhouse","ciudad":"Ronda","direccion":"Calle Los Remedios, 2, 29400 Ronda, Málaga","lat":36.74095,"lng":-5.16393,"precio":55},{"nombre":"Bar Txepetxa","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle Pescadería, 5, 20003 Donostia-San Sebastián","lat":43.32377,"lng":-1.98398,"precio":20},{"nombre":"Casa Antonio","tipo":"Spanish","ciudad":"Jaén","direccion":"Calle Fermín Palma, 3, 23002 Jaén","lat":37.77453,"lng":-3.7876,"precio":35},{"nombre":"La Taberna de Élia","tipo":"Asador-Steak","ciudad":"Pozuelo de Alarcón","direccion":"Calle Silvio d'Ors, 2, 28223 Pozuelo de Alarcón, Madrid","lat":40.43682,"lng":-3.79357,"precio":55},{"nombre":"Bar Cañete","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de la Unió, 17, 08001 Barcelona","lat":41.37917,"lng":2.17308,"precio":40},{"nombre":"La Taberna de Mike Palmer","tipo":"Mediterranean","ciudad":"Málaga","direccion":"Calle Obispo, 8, 29015 Málaga","lat":36.71938,"lng":-4.42765,"precio":40},{"nombre":"Laia Erretegia","tipo":"Asador-Steak","ciudad":"Hondarribia","direccion":"Zuloaga Kalea, 14, 20280 Hondarribia, Gipuzkoa","lat":43.36853,"lng":-1.79355,"precio":70},{"nombre":"Casa Morales","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle García de Vinuesa, 11, 41001 Sevilla","lat":37.38653,"lng":-5.99461,"precio":20},{"nombre":"Asador Portuetxe","tipo":"Asador - Steak","ciudad":"San Sebastián","direccion":"Portuetxe Kalea, 70, 20018 Donostia-San Sebastián","lat":43.2984,"lng":-1.9788,"precio":65},{"nombre":"Lana Parrilla Argentina","tipo":"Argentian Steakhouse","ciudad":"Madrid","direccion":"Calle del Pinar, 16, 28006 Madrid","lat":40.4387,"lng":-3.68722,"precio":55},{"nombre":"La Maruca","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Velázquez, 54, 28001 Madrid","lat":40.42748,"lng":-3.68362,"precio":40},{"nombre":"Besta Barcelona","tipo":"Catalan-Galician","ciudad":"Barcelona","direccion":"Carrer de Provença, 32, 08029 Barcelona","lat":41.38216,"lng":2.14525,"precio":55},{"nombre":"Bodeguita Romero","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Harinas, 10, 41001 Sevilla","lat":37.38704,"lng":-5.9957,"precio":25},{"nombre":"La Viña del Ensanche","tipo":"Tapas Bar","ciudad":"Bilbao","direccion":"Calle Diputación, 10, 48008 Bilbao, Bizkaia","lat":43.26168,"lng":-2.93273,"precio":30},{"nombre":"Landa","tipo":"Spanish","ciudad":"Burgos","direccion":"Ctra. Madrid-Irún N-I, km 235, 09001 Burgos","lat":41.78987,"lng":-3.91795,"precio":60},{"nombre":"Central Bar by Ricard Camerena","tipo":"Tapas Bar","ciudad":"València","direccion":"Mercat Central, Plaça de la Ciutat de Bruges, 46001 València","lat":39.47349,"lng":-0.37891,"precio":35},{"nombre":"Casa Marcelo","tipo":"Asian Small Plates","ciudad":"Santiago de Compostela","direccion":"Rúa do Hortas, 1, 15705 Santiago de Compostela, A Coruña","lat":42.8804,"lng":-8.54927,"precio":65},{"nombre":"Gresca","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer de Provença, 230, 08008 Barcelona","lat":41.39132,"lng":2.15718,"precio":55},{"nombre":"Almansa","tipo":"Asador","ciudad":"Seville","direccion":"Calle Betis, 66, 41010 Sevilla","lat":37.3833,"lng":-5.99969,"precio":45},{"nombre":"Sa Nansa","tipo":"Seafood","ciudad":"Eivissa","direccion":"Avinguda de Bartomeu Vicent Ramon, 62, 07800 Eivissa","lat":38.91798,"lng":1.44491,"precio":55},{"nombre":"Muka","tipo":"Grill Cuisine","ciudad":"San Sebastián","direccion":"Calle Iñigo, 6, 20003 Donostia-San Sebastián","lat":43.32393,"lng":-1.98413,"precio":65},{"nombre":"La Milla Marbella","tipo":"Spanish","ciudad":"Marbella","direccion":"Urbanización Coral Beach, Ctra. de Cádiz, km 176, 29602 Marbella","lat":36.51,"lng":-4.91,"precio":60},{"nombre":"Paco Meralgo","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de Muntaner, 171, 08036 Barcelona","lat":41.39162,"lng":2.15248,"precio":35},{"nombre":"Baserri Maitea","tipo":"Basque","ciudad":"Forua","direccion":"Barrio Munitibar, 5, 48350 Forua, Bizkaia","lat":43.3231,"lng":-2.774,"precio":55},{"nombre":"Pinotxo","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Mercat de la Boqueria, Loc. 466-470, 08001 Barcelona","lat":41.3818,"lng":2.1722,"precio":25},{"nombre":"Bar Los Diamantes","tipo":"Tapas Bar","ciudad":"Granada","direccion":"Calle Navas, 26, 18009 Granada","lat":37.17345,"lng":-3.59784,"precio":20},{"nombre":"Sylkar","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle de Zurbano, 52, 28010 Madrid","lat":40.43243,"lng":-3.69337,"precio":35},{"nombre":"Bar Mut","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de Pau Claris, 192, 08037 Barcelona","lat":41.3973,"lng":2.16128,"precio":45},{"nombre":"El Campanario Golf & Country House","tipo":"Spanish","ciudad":"Estepona","direccion":"Ctra. N-340, km 167, 29680 Estepona, Málaga","lat":36.439,"lng":-5.104,"precio":50},{"nombre":"Quimet et Quimet","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer del Poeta Cabanyes, 25, 08004 Barcelona","lat":41.37422,"lng":2.16574,"precio":20},{"nombre":"Es Xarcu","tipo":"Spanish","ciudad":"Ibiza","direccion":"Ctra. Ibiza-Sant Josep, km 10, 07817 Sa Caleta, Eivissa","lat":38.8685,"lng":1.31152,"precio":60},{"nombre":"La Casa del Abuelo","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle de la Victoria, 12, 28012 Madrid","lat":40.41578,"lng":-3.70175,"precio":25},{"nombre":"Julián de Tolosa","tipo":"Asador-Steak","ciudad":"Madrid","direccion":"Calle de la Cava Baja, 18, 28005 Madrid","lat":40.41277,"lng":-3.7088,"precio":75},{"nombre":"Chinchín Puerto","tipo":"Seafood","ciudad":"Málaga","direccion":"Muelle Pesquero, s/n, 29001 Málaga","lat":36.7188,"lng":-4.4187,"precio":40},{"nombre":"La Casa del Tigre","tipo":"Creative Cuisine","ciudad":"Seville","direccion":"Calle Peris Mencheta, 18, 41003 Sevilla","lat":37.39958,"lng":-5.99203,"precio":40},{"nombre":"Sidreria Usategui","tipo":"Basque","ciudad":"Marbella","direccion":"Calle Carlos Mackintosh, 1, 29601 Marbella, Málaga","lat":36.50853,"lng":-4.88592,"precio":50},{"nombre":"Don Joaquín Asador","tipo":"Asador","ciudad":"Pizzara","direccion":"Avenida de las Nieves, 1, 29550 Pizarra, Málaga","lat":36.899,"lng":-4.702,"precio":35},{"nombre":"Arte de Cozina","tipo":"Malagueño","ciudad":"Antequerra","direccion":"Calle Calzada, 27, 29200 Antequera, Málaga","lat":37.01833,"lng":-4.55798,"precio":40},{"nombre":"Asador Landa","tipo":"Basque","ciudad":"Mendaro","direccion":"Barrio Akola, 4, 20850 Mendaro, Gipuzkoa","lat":43.2157,"lng":-2.496,"precio":55},{"nombre":"Atari Gastroteka","tipo":"Progressive Tapas","ciudad":"San Sebastián","direccion":"Calle Mayor, 18, 20003 Donostia-San Sebastián","lat":43.32358,"lng":-1.9864,"precio":35},{"nombre":"Juan y Andrea","tipo":"Seafood","ciudad":"Formentera","direccion":"Platja Illetes, s/n, 07871 Formentera, Illes Balears","lat":38.75395,"lng":1.43342,"precio":70},{"nombre":"El Bigotes","tipo":"Seafood","ciudad":"Ibiza","direccion":"Cala Mastella, s/n, 07840 Santa Eulalia del Río, Eivissa","lat":39.02651,"lng":1.5935,"precio":50},{"nombre":"Marisqueria Jacinto","tipo":"Marisquería","ciudad":"Málaga","direccion":"Calle Lagunillas, 14, 29012 Málaga","lat":36.72518,"lng":-4.41689,"precio":40},{"nombre":"Asador Taskas","tipo":"Asador","ciudad":"Bilbao","direccion":"Calle del Perro, 2, 48005 Bilbao, Bizkaia","lat":43.25771,"lng":-2.92501,"precio":50},{"nombre":"Restaurante El Parador Playa","tipo":"Marisquería","ciudad":"Benalmádena","direccion":"Paseo Marítimo, 23, 29639 Benalmádena Costa, Málaga","lat":36.59324,"lng":-4.52116,"precio":40},{"nombre":"Taberna La Tana","tipo":"Wine Bar","ciudad":"Granada","direccion":"Placeta del Agua, 3, 18010 Granada","lat":37.17275,"lng":-3.59609,"precio":25},{"nombre":"Uvedoble Taberna","tipo":"Tapas Bar","ciudad":"Málaga","direccion":"Calle Cárcer, 8, 29015 Málaga","lat":36.72395,"lng":-4.41931,"precio":35},{"nombre":"Andala Marbella","tipo":"Andalusian","ciudad":"Marbella","direccion":"Calle Portada, 4, 29601 Marbella, Málaga","lat":36.5114,"lng":-4.88419,"precio":40},{"nombre":"El Yerno","tipo":"Seafood","ciudad":"Málaga","direccion":"Calle Lagunillas, 9, 29012 Málaga","lat":36.72517,"lng":-4.41702,"precio":35},{"nombre":"Banys Lluís","tipo":"Seafood","ciudad":"Sant Pol de Mar","direccion":"Carrer Sant Jaume, 3, 08395 Sant Pol de Mar, Barcelona","lat":41.60084,"lng":2.62012,"precio":55},{"nombre":"Balear","tipo":"Arroceria","ciudad":"Madrid","direccion":"Calle de Sagunto, 18, 28010 Madrid","lat":40.43384,"lng":-3.69902,"precio":40},{"nombre":"Mont Bar","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 220, 08011 Barcelona","lat":41.38623,"lng":2.16169,"precio":45},{"nombre":"Vila Vinoteca","tipo":"Wine Bar","ciudad":"Barcelona","direccion":"Carrer d'Agullers, 7, 08003 Barcelona","lat":41.3839,"lng":2.1839,"precio":35},{"nombre":"Espacio Eslava","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Eslava, 3, 41002 Sevilla","lat":37.39755,"lng":-5.99692,"precio":35},{"nombre":"La Marea de Marcos","tipo":"Marisquería","ciudad":"Jerez de la Frontera","direccion":"Calle Lancería, 7, 11403 Jerez de la Frontera, Cádiz","lat":36.68209,"lng":-6.13744,"precio":45},{"nombre":"Bar Sport","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Fermín Calbetón, 10, 20003 Donostia-San Sebastián","lat":43.32352,"lng":-1.98376,"precio":25},{"nombre":"O'Pazo","tipo":"Marisquería","ciudad":"Madrid","direccion":"Calle de Reina Mercedes, 20, 28020 Madrid","lat":40.45081,"lng":-3.69732,"precio":80},{"nombre":"La Buena Vida","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle del Conde de Xiquena, 8, 28004 Madrid","lat":40.42292,"lng":-3.69407,"precio":50},{"nombre":"Garum 2.1 Bistronómic Tapas Bar","tipo":"Tapas Bar","ciudad":"Córdoba","direccion":"Calle de la Bartolomé Díaz Llano, 2, 14003 Córdoba","lat":37.8858,"lng":-4.7826,"precio":35},{"nombre":"Granja Elena","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer de Buenos Aires, 22, 08036 Barcelona","lat":41.3872,"lng":2.1528,"precio":45},{"nombre":"Patxiku - Enea","tipo":"Asador - Steak","ciudad":"Lezo","direccion":"Lastaola Kalea, 1, 20100 Lezo, Gipuzkoa","lat":43.32931,"lng":-1.85817,"precio":65},{"nombre":"Restaurante Barrera","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Génova, 12, 28004 Madrid","lat":40.42685,"lng":-3.69447,"precio":45},{"nombre":"Venta Esteban","tipo":"Andalusian","ciudad":"Jerez de la Frontera","direccion":"Ctra. de Arcos, km 2, 11407 Jerez de la Frontera, Cádiz","lat":36.70855,"lng":-6.05681,"precio":35},{"nombre":"Las Rejas","tipo":"Marisquería","ciudad":"El Lentiscal","direccion":"Calle Real, 2, 35017 El Lentiscal, Las Palmas de Gran Canaria","lat":28.04938,"lng":-15.47245,"precio":55},{"nombre":"Piantaio","tipo":"Argentinian Steakhouse","ciudad":"Madrid","direccion":"Calle de Caracas, 22, 28010 Madrid","lat":40.4302,"lng":-3.695,"precio":55},{"nombre":"Botafumeiro","tipo":"Marisquería","ciudad":"Barcelona","direccion":"Carrer Gran de Gràcia, 81, 08012 Barcelona","lat":41.4004,"lng":2.15464,"precio":70},{"nombre":"La Cosmopolita","tipo":"Progressive Tapas","ciudad":"Málaga","direccion":"Calle José Denis Belgrano, 3, 29015 Málaga","lat":36.72188,"lng":-4.42005,"precio":35},{"nombre":"Bedua","tipo":"Asador","ciudad":"Zumaia","direccion":"Bedua Auzoa, 5, 20750 Zumaia, Gipuzkoa","lat":43.292,"lng":-2.248,"precio":65},{"nombre":"Paradiso","tipo":"Cocktail Bar","ciudad":"Barcelona","direccion":"Carrer de Rera Palau, 4, 08003 Barcelona","lat":41.38367,"lng":2.1837,"precio":20},{"nombre":"Cataria","tipo":"Asador - Seafood","ciudad":"Chiclana de la Frontera","direccion":"Hotel Iberostar Andalucía Playa, 11130 Chiclana de la Frontera, Cádiz","lat":36.34786,"lng":-6.16554,"precio":90},{"nombre":"Café Iruña","tipo":"Bar","ciudad":"Pamplona","direccion":"Calle Estafeta, 44, 31001 Pamplona, Navarra","lat":42.81728,"lng":-1.64201,"precio":15},{"nombre":"Tragatá","tipo":"Tapas Bar","ciudad":"Ronda","direccion":"Calle Nueva, 4, 29400 Ronda, Málaga","lat":36.74149,"lng":-5.16599,"precio":35},{"nombre":"Alhucemas","tipo":"Andalusian-Seafood","ciudad":"Sanlúcar la Mayor","direccion":"Calle Rosario, 1, 41800 Sanlúcar la Mayor, Sevilla","lat":37.38164,"lng":-6.19973,"precio":35},{"nombre":"Suru Bar","tipo":"Wine Bar","ciudad":"Barcelona","direccion":"Carrer d'Enric Granados, 9, 08007 Barcelona","lat":41.38768,"lng":2.16234,"precio":30},{"nombre":"El Pescador","tipo":"Marisquería","ciudad":"Madrid","direccion":"Calle de José Ortega y Gasset, 75, 28006 Madrid","lat":40.42992,"lng":-3.67286,"precio":75},{"nombre":"Restaurante Colósimo","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Sagasta, 26, 28004 Madrid","lat":40.42789,"lng":-3.69766,"precio":40},{"nombre":"La Castela","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle del Doctor Castelo, 22, 28009 Madrid","lat":40.42033,"lng":-3.67666,"precio":40},{"nombre":"Marisqueria Rafa","tipo":"Marisquería","ciudad":"Madrid","direccion":"Calle de Narváez, 68, 28009 Madrid","lat":40.41793,"lng":-3.67647,"precio":60},{"nombre":"El Portal Taberna & Wines","tipo":"Tapas Bar","ciudad":"Alicante","direccion":"Calle de la Independencia, 21, 03002 Alicante","lat":38.3455,"lng":-0.4849,"precio":40},{"nombre":"Boroa Jatetxea","tipo":"Basque","ciudad":"Amorebieta-Etxano","direccion":"Barrio Boroa, 8, 48340 Amorebieta-Etxano, Bizkaia","lat":43.222,"lng":-2.719,"precio":55},{"nombre":"Bar Martinez","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle 31 de Agosto, 13, 20003 Donostia-San Sebastián","lat":43.32422,"lng":-1.9852,"precio":25},{"nombre":"Maitea Taberna","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 93, 08015 Barcelona","lat":41.3818,"lng":2.15536,"precio":30},{"nombre":"Cerveceria Catalana","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de Mallorca, 236, 08008 Barcelona","lat":41.3924,"lng":2.1609,"precio":25},{"nombre":"Tragabuches","tipo":"Andalusian","ciudad":"Marbella","direccion":"Calle Alonso de Bazán, 1, 29602 Marbella, Málaga","lat":36.50966,"lng":-4.88909,"precio":55},{"nombre":"Puratasca","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Argote de Molina, 1, 41004 Sevilla","lat":37.38765,"lng":-5.99186,"precio":30},{"nombre":"Normal","tipo":"Catalan","ciudad":"Girona","direccion":"Carrer de les Hortes, 16, 17004 Girona","lat":41.98457,"lng":2.82273,"precio":50},{"nombre":"Sobretablas","tipo":"Andalusian","ciudad":"Seville","direccion":"Calle Albareda, 18, 41001 Sevilla","lat":37.38964,"lng":-5.99576,"precio":35},{"nombre":"Fishology","tipo":"Seafood","ciudad":"Barcelona","direccion":"Carrer d'Enric Granados, 12, 08007 Barcelona","lat":41.38869,"lng":2.16143,"precio":40},{"nombre":"Bar Gorriti","tipo":"Tapas Bar","ciudad":"Pamplona","direccion":"Calle San Lorenzo, 1, 31001 Pamplona, Navarra","lat":42.8165,"lng":-1.6443,"precio":15},{"nombre":"Topa Sukalderia","tipo":"Eclectic","ciudad":"San Sebastián","direccion":"Calle San Marcial, 52, 20005 Donostia-San Sebastián","lat":43.31799,"lng":-1.98433,"precio":45},{"nombre":"Nakeima","tipo":"Dumpling Bar","ciudad":"Madrid","direccion":"Calle de los Reyes, 9, 28015 Madrid","lat":40.42417,"lng":-3.7092,"precio":25},{"nombre":"Sa Llagosta","tipo":"Seafood","ciudad":"Fornells","direccion":"Carrer Major, 7, 07748 Fornells, Menorca","lat":40.05578,"lng":4.1304,"precio":55},{"nombre":"Asador Indusi","tipo":"Asador","ciudad":"Bilbao","direccion":"Calle Gordóniz, 53, 48002 Bilbao, Bizkaia","lat":43.25364,"lng":-2.94514,"precio":45},{"nombre":"Bar Fiesta","tipo":"Tapas Bar","ciudad":"Marbella","direccion":"Plaza de los Naranjos, 14, 29601 Marbella, Málaga","lat":36.51023,"lng":-4.88499,"precio":25},{"nombre":"Bar Yebra","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Francos, 24, 41004 Sevilla","lat":37.38893,"lng":-5.99274,"precio":20},{"nombre":"Restaurant Bonay","tipo":"Mediterranean","ciudad":"Barcelona","direccion":"Gran Via de les Corts Catalanes, 700, 08010 Barcelona","lat":41.39361,"lng":2.17428,"precio":50},{"nombre":"La Taberna del Gourmet","tipo":"Gastrobar-Seafood","ciudad":"Alicante","direccion":"Calle de la Independencia, 1, 03002 Alicante","lat":38.3453,"lng":-0.4847,"precio":45},{"nombre":"Restaurante Hotel Antonio","tipo":"Seafood","ciudad":"Zahara de los Atunes","direccion":"Calle María Luisa, s/n, 11393 Zahara de los Atunes, Cádiz","lat":36.13628,"lng":-5.8438,"precio":60},{"nombre":"Casa Montaña","tipo":"Tapas Bar","ciudad":"València","direccion":"Carrer de Josep Benlliure, 69, 46011 València","lat":39.4618,"lng":-0.3473,"precio":30},{"nombre":"Tapas 24","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 269, 08007 Barcelona","lat":41.39087,"lng":2.16747,"precio":30},{"nombre":"Vivanda","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer Major de Sarrià, 134, 08017 Barcelona","lat":41.40048,"lng":2.12099,"precio":60},{"nombre":"La Barra de El Faro","tipo":"Seafood Tapas","ciudad":"Cádiz","direccion":"Calle San Félix, 15, 11001 Cádiz","lat":36.52858,"lng":-6.30382,"precio":35},{"nombre":"Los Fueros","tipo":"Basque","ciudad":"Bilbao","direccion":"Calle de la Ribera, 8, 48005 Bilbao, Bizkaia","lat":43.27025,"lng":-2.9421,"precio":40},{"nombre":"Comparte Bistró","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Alcalá, 55, 28014 Madrid","lat":40.41993,"lng":-3.6917,"precio":40},{"nombre":"Arrocería Duna","tipo":"Arroceria","ciudad":"València","direccion":"Passeig de Neptú, 2, 46011 València","lat":39.4548,"lng":-0.3265,"precio":45},{"nombre":"Sa Pedrera d´es Pujol","tipo":"Spanish","ciudad":"Saint Luis","direccion":"Carretera de Binisaida, km 4, 07710 Sant Lluís, Menorca","lat":39.856,"lng":4.268,"precio":55},{"nombre":"Ca l'Isidre","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer de les Flors, 12, 08001 Barcelona","lat":41.37594,"lng":2.16794,"precio":65},{"nombre":"El Rinconcillo","tipo":"Tapas Bar","ciudad":"Seville","direccion":"Calle Gerona, 40, 41003 Sevilla","lat":37.39334,"lng":-5.98829,"precio":25},{"nombre":"Da Filippo - Trattoria","tipo":"Trattoria-Enoteca","ciudad":"San Sebastián","direccion":"Calle Narrica, 8, 20003 Donostia-San Sebastián","lat":43.32316,"lng":-1.984,"precio":40},{"nombre":"Casa Pepe de La Judería","tipo":"Andalusian","ciudad":"Córdoba","direccion":"Calle Romero, 1, 14003 Córdoba","lat":37.87979,"lng":-4.7813,"precio":35},{"nombre":"Charrúa Madrid","tipo":"Argentinian","ciudad":"Madrid","direccion":"Calle de Fernando VI, 17, 28004 Madrid","lat":40.4252,"lng":-3.69571,"precio":60},{"nombre":"La Tasqueria de Javi Estevez","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle de Duque de Sesto, 48, 28009 Madrid","lat":40.4186,"lng":-3.6769,"precio":50},{"nombre":"Atelier Casa de Comidas","tipo":"Spanish","ciudad":"Granada","direccion":"Calle de San Antón, 51, 18005 Granada","lat":37.17022,"lng":-3.59952,"precio":40},{"nombre":"La Piperna","tipo":"Italian","ciudad":"Madrid","direccion":"Calle del Príncipe de Vergara, 211, 28002 Madrid","lat":40.45126,"lng":-3.67789,"precio":45},{"nombre":"Gorria","tipo":"Basque","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 421, 08013 Barcelona","lat":41.39872,"lng":2.17799,"precio":60},{"nombre":"Mendi Goikoa Bekoa","tipo":"Basque","ciudad":"Axpe","direccion":"Barrio San Juan, 33, 48291 Axpe, Bizkaia","lat":43.187,"lng":-2.628,"precio":60},{"nombre":"Vuelve Carolina","tipo":"Tapas Bar","ciudad":"València","direccion":"Carrer de Correus, 8, 46002 València","lat":39.46974,"lng":-0.37451,"precio":35},{"nombre":"Haramboure","tipo":"Basque","ciudad":"Madrid","direccion":"Calle del Padre Damián, 2, 28036 Madrid","lat":40.46289,"lng":-3.6852,"precio":55},{"nombre":"Berbena","tipo":"Mediterranean","ciudad":"Barcelona","direccion":"Carrer del Parlament, 9, 08015 Barcelona","lat":41.37577,"lng":2.16132,"precio":50},{"nombre":"Casa Nicolás","tipo":"Asador-Steak","ciudad":"Tolosa","direccion":"Calle Navarra, 6, 20400 Tolosa, Gipuzkoa","lat":43.1289,"lng":-2.0768,"precio":75},{"nombre":"Bistronomika Restaurante","tipo":"Seafood-Mediterranean","ciudad":"Madrid","direccion":"Calle de Padilla, 56, 28006 Madrid","lat":40.4312,"lng":-3.67734,"precio":55},{"nombre":"Desencaja","tipo":"Creative","ciudad":"Madrid","direccion":"Paseo de la Chopera, 143, 28045 Madrid","lat":40.39604,"lng":-3.702,"precio":70},{"nombre":"La Fisna Vinos","tipo":"Wine Bar","ciudad":"Madrid","direccion":"Calle de Fernández de los Ríos, 72, 28015 Madrid","lat":40.43539,"lng":-3.71281,"precio":30},{"nombre":"Tres por Cuatro","tipo":"Market Cuisine","ciudad":"Madrid","direccion":"Calle de Pelayo, 34, 28004 Madrid","lat":40.42339,"lng":-3.69807,"precio":45},{"nombre":"Coure","tipo":"Catalan","ciudad":"Barcelona","direccion":"Passatge de la Concepció, 5, 08008 Barcelona","lat":41.39473,"lng":2.1604,"precio":60},{"nombre":"Angelita Madrid","tipo":"Wine Bar","ciudad":"Madrid","direccion":"Calle del Reina, 4, 28004 Madrid","lat":40.4252,"lng":-3.694,"precio":35},{"nombre":"Geralds Bar","tipo":"Modern Spanish","ciudad":"San Sebastián","direccion":"Calle Andia, 14, 20004 Donostia-San Sebastián","lat":43.31987,"lng":-1.98431,"precio":30},{"nombre":"Casa de Tapas Cañota","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer de Lleida, 7, 08004 Barcelona","lat":41.37434,"lng":2.15455,"precio":35},{"nombre":"El Higuerón","tipo":"Andalusian","ciudad":"Fuengirola","direccion":"Ctra. de Mijas, s/n, 29640 Fuengirola, Málaga","lat":36.58707,"lng":-4.59966,"precio":50},{"nombre":"Andra Mari","tipo":"Basque","ciudad":"Galdakao","direccion":"Barrio Elexalde, 22, 48960 Galdakao, Bizkaia","lat":43.23499,"lng":-2.83233,"precio":70},{"nombre":"Capet","tipo":"Global","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 201, 08011 Barcelona","lat":41.38618,"lng":2.16126,"precio":50},{"nombre":"Bodega La Ardosa","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle de Colón, 13, 28004 Madrid","lat":40.42377,"lng":-3.70177,"precio":20},{"nombre":"Tripea","tipo":"Peruvian","ciudad":"Madrid","direccion":"Calle del General Pardiñas, 49, 28001 Madrid","lat":40.42689,"lng":-3.67849,"precio":55},{"nombre":"Gran Café Santander","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Goya, 47, 28001 Madrid","lat":40.42528,"lng":-3.68249,"precio":45},{"nombre":"Andreu Genestra","tipo":"Catalan","ciudad":"Capdepera","direccion":"Carretera Artà-Port d'Alcúdia, km 14,5, 07580 Capdepera, Mallorca","lat":39.71,"lng":3.448,"precio":80},{"nombre":"Ca Na Toneta","tipo":"Mediterranean","ciudad":"Caimari","direccion":"Carrer de les Hortenses, 21, 07314 Caimari, Mallorca","lat":39.77127,"lng":2.90221,"precio":65},{"nombre":"El Senor Martin","tipo":"Marisquería","ciudad":"Madrid","direccion":"Calle del General Castanos, 13, 28004 Madrid","lat":40.42609,"lng":-3.69388,"precio":60},{"nombre":"Fuente Aceña","tipo":"Spanish","ciudad":"Quintanilla de Onésimo","direccion":"Ctra. de Quintanilla, km 1, 47350 Quintanilla de Onésimo, Valladolid","lat":41.62759,"lng":-4.32813,"precio":50},{"nombre":"Tatel","tipo":"Spanish","ciudad":"Madrid","direccion":"Paseo de la Castellana, 36, 28046 Madrid","lat":40.43246,"lng":-3.68781,"precio":80},{"nombre":"Taberna Verdejo","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Ayala, 25, 28001 Madrid","lat":40.42772,"lng":-3.68435,"precio":35},{"nombre":"Haranita","tipo":"Asian Fusion","ciudad":"Madrid","direccion":"Calle de Barquillo, 5, 28004 Madrid","lat":40.42006,"lng":-3.69819,"precio":45},{"nombre":"Noi","tipo":"Italian","ciudad":"Madrid","direccion":"Calle de Zurbano, 6, 28010 Madrid","lat":40.42725,"lng":-3.6936,"precio":55},{"nombre":"Askua Barra","tipo":"Asador - Steak","ciudad":"Madrid","direccion":"Calle de Miguel Ángel, 12, 28010 Madrid","lat":40.4332,"lng":-3.69134,"precio":65},{"nombre":"Viavélez","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle del General Perón, 10, 28020 Madrid","lat":40.451,"lng":-3.7,"precio":55},{"nombre":"Brutalista","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Tutor, 8, 28008 Madrid","lat":40.42868,"lng":-3.71613,"precio":40},{"nombre":"Asador Donostiarra","tipo":"Asador","ciudad":"Madrid","direccion":"Calle de la Infanta Mercedes, 79, 28020 Madrid","lat":40.46178,"lng":-3.69578,"precio":55},{"nombre":"Victor Montes","tipo":"Tapas Bar","ciudad":"Bilbao","direccion":"Plaza Nueva, 8, 48005 Bilbao, Bizkaia","lat":43.25881,"lng":-2.92229,"precio":30},{"nombre":"La Catapa","tipo":"Taberna","ciudad":"Madrid","direccion":"Calle de Modesto Lafuente, 36, 28003 Madrid","lat":40.44113,"lng":-3.69606,"precio":35},{"nombre":"SinoFos","tipo":"Market Cuisine","ciudad":"Girona","direccion":"Carrer del Nord, 7, 17001 Girona","lat":41.9849,"lng":2.82268,"precio":55},{"nombre":"Palo Verde","tipo":"Modern European","ciudad":"Barcelona","direccion":"Carrer de Loreto, 47, 08029 Barcelona","lat":41.39023,"lng":2.14221,"precio":55},{"nombre":"Almarge","tipo":"Wine Bar","ciudad":"Badalona","direccion":"Carrer del Mar, 31, 08911 Badalona, Barcelona","lat":41.444,"lng":2.2473,"precio":30},{"nombre":"Taberna El Olmo","tipo":"Grill Cuisine","ciudad":"Córdoba","direccion":"Calle Conde de Torres Cabrera, 6, 14003 Córdoba","lat":37.8856,"lng":-4.783,"precio":35},{"nombre":"Asador Xixario","tipo":"Seafood Asador","ciudad":"Orio","direccion":"Calle Orrua, 4, 20810 Orio, Gipuzkoa","lat":43.2759,"lng":-2.12789,"precio":65},{"nombre":"Bodegas Castañeda","tipo":"Andalusian","ciudad":"Granada","direccion":"Calle de Almireceros, 1, 18010 Granada","lat":37.17683,"lng":-3.59699,"precio":20},{"nombre":"Alabaster","tipo":"Galician","ciudad":"Madrid","direccion":"Calle de Montalbán, 9, 28014 Madrid","lat":40.41819,"lng":-3.68983,"precio":55},{"nombre":"Rosin","tipo":"Frank Rosin","ciudad":"San Sebastián","direccion":"Calle Zubieta, 56, 20007 Donostia-San Sebastián","lat":43.31569,"lng":-1.98787,"precio":75},{"nombre":"Street XO","tipo":"Asian Street Food","ciudad":"Madrid","direccion":"Calle de Serrano, 52, 28001 Madrid","lat":40.42762,"lng":-3.68709,"precio":65},{"nombre":"Marisqueria Godoy","tipo":"Marisquería","ciudad":"Málaga","direccion":"Calle Compositor Lehmberg Ruiz, 16, 29007 Málaga","lat":36.7179,"lng":-4.43238,"precio":45},{"nombre":"El Pegoli","tipo":"Marisquería","ciudad":"Dénia","direccion":"Camí del Raset, s/n, 03700 Dénia, Alicante","lat":38.83373,"lng":0.13739,"precio":55},{"nombre":"Quinqué","tipo":"Market Cuisine","ciudad":"Madrid","direccion":"Calle de San Bernardino, 7, 28015 Madrid","lat":40.4252,"lng":-3.71058,"precio":45},{"nombre":"Kate Zaharra","tipo":"Basque","ciudad":"Bilbao","direccion":"Calle Iturribide, 49, 48006 Bilbao, Bizkaia","lat":43.25726,"lng":-2.91748,"precio":45},{"nombre":"Restaurante Vinoteca García de la Navarra","tipo":"Traditional Spanish","ciudad":"Madrid","direccion":"Calle de Serrano Jover, 1, 28015 Madrid","lat":40.42994,"lng":-3.7143,"precio":45},{"nombre":"7 Portes","tipo":"Catalan","ciudad":"Barcelona","direccion":"Passeig d'Isabel II, 14, 08003 Barcelona","lat":41.38217,"lng":2.18325,"precio":50},{"nombre":"Berria","tipo":"Wine Bar","ciudad":"Madrid","direccion":"Calle de Pelayo, 64, 28004 Madrid","lat":40.42339,"lng":-3.69807,"precio":30},{"nombre":"Trèsde","tipo":"French","ciudad":"Madrid","direccion":"Calle de Velázquez, 150, 28002 Madrid","lat":40.44317,"lng":-3.68232,"precio":55},{"nombre":"La Mejillonera","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle del Puerto, 15, 20003 Donostia-San Sebastián","lat":43.32325,"lng":-1.98653,"precio":15},{"nombre":"CruiX","tipo":"Creative Catalan","ciudad":"Barcelona","direccion":"Carrer de la Diputació, 48, 08015 Barcelona","lat":41.3808,"lng":2.156,"precio":55},{"nombre":"Pelotari","tipo":"Basque","ciudad":"Madrid","direccion":"Calle de Recoletos, 3, 28001 Madrid","lat":40.42221,"lng":-3.69074,"precio":50},{"nombre":"Joselito's","tipo":"Charcuteria & Tapas Bar","ciudad":"Madrid","direccion":"Calle de Velázquez, 25, 28001 Madrid","lat":40.42703,"lng":-3.68397,"precio":35},{"nombre":"La Primera","tipo":"Spanish","ciudad":"Madrid","direccion":"Gran Vía, 1, 28013 Madrid","lat":40.41911,"lng":-3.69787,"precio":55},{"nombre":"El Conjuro","tipo":"Andalusian","ciudad":"Granada","direccion":"Calle Navas, 18, 18009 Granada","lat":37.17345,"lng":-3.59784,"precio":30},{"nombre":"Bar del Puerto","tipo":"Seafood","ciudad":"Santander","direccion":"Calle Hernán Cortés, 63, 39003 Santander, Cantabria","lat":43.46334,"lng":-3.7969,"precio":35},{"nombre":"Hermanos Vinagre","tipo":"Tapas Bar","ciudad":"Madrid","direccion":"Calle del López de Hoyos, 56, 28002 Madrid","lat":40.42286,"lng":-3.69701,"precio":35},{"nombre":"The Ivy","tipo":"Tapas Bar","ciudad":"Bilbao","direccion":"Calle de la Ribera, 1, 48005 Bilbao, Bizkaia","lat":43.26965,"lng":-2.94245,"precio":45},{"nombre":"Bar Goiz-Argi","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Fermín Calbetón, 4, 20003 Donostia-San Sebastián","lat":43.32356,"lng":-1.98345,"precio":25},{"nombre":"Gran Azul","tipo":"Rice & Grill","ciudad":"València","direccion":"Carrer dels Conradors, 47, 46011 València","lat":39.461,"lng":-0.347,"precio":45},{"nombre":"Asador Trinkete Borda","tipo":"Asador - Steak","ciudad":"Irun","direccion":"Ctra. de Behobia, 145, 20301 Irun, Gipuzkoa","lat":43.3421,"lng":-1.75992,"precio":60},{"nombre":"Fismuler","tipo":"Natural Wine Bar","ciudad":"Barcelona","direccion":"Carrer de Rosselló, 249, 08008 Barcelona","lat":41.395,"lng":2.1585,"precio":55},{"nombre":"La Raquetista","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle del Doctor Fourquet, 22, 28012 Madrid","lat":40.40727,"lng":-3.69835,"precio":40},{"nombre":"Latasia Casa De Comidas","tipo":"Fusion Cuisine","ciudad":"Madrid","direccion":"Calle de Ibiza, 26, 28009 Madrid","lat":40.41809,"lng":-3.6754,"precio":45},{"nombre":"Taberna de Miguel","tipo":"Marisquería","ciudad":"Bailén","direccion":"Calle San Felipe, 12, 23710 Bailén, Jaén","lat":38.099,"lng":-3.767,"precio":35},{"nombre":"YERBAGÜENA CAMPILLOS","tipo":"Mediterranean","ciudad":"Campillos","direccion":"Calle Real, 9, 29320 Campillos, Málaga","lat":37.04956,"lng":-4.86073,"precio":30},{"nombre":"Salmon Guru","tipo":"Cocktail Bar","ciudad":"Madrid","direccion":"Calle del Echegaray, 21, 28014 Madrid","lat":40.4149,"lng":-3.69953,"precio":20},{"nombre":"Can Cisa - Bar Brutal","tipo":"Organic-Wine Bar","ciudad":"Barcelona","direccion":"Carrer de la Princesa, 14, 08003 Barcelona","lat":41.38485,"lng":2.17992,"precio":30},{"nombre":"La Lloreria","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de la Palma, 4, 28004 Madrid","lat":40.42616,"lng":-3.70162,"precio":35},{"nombre":"Marmiton Bistro","tipo":"Modern Spanish","ciudad":"Madrid","direccion":"Calle de Lagasca, 60, 28001 Madrid","lat":40.42718,"lng":-3.68505,"precio":45},{"nombre":"Cañadio","tipo":"Cantabrian","ciudad":"Cantabria","direccion":"Calle Gómez Oreña, 15, 39003 Santander, Cantabria","lat":43.46368,"lng":-3.80175,"precio":45},{"nombre":"La Carbona","tipo":"Andalusian-Sherry Cuisine","ciudad":"Jerez-de-la-Fronera","direccion":"Calle San Francisco de Paula, 2, 11403 Jerez de la Frontera, Cádiz","lat":36.68252,"lng":-6.13236,"precio":50},{"nombre":"Els Pescadors - Barcelona","tipo":"Marisquería","ciudad":"Barcelona","direccion":"Plaça de Prim, 1, 08005 Barcelona","lat":41.3994,"lng":2.20675,"precio":55},{"nombre":"Sa Jambina","tipo":"Catalan-Seafood","ciudad":"Calella de Palafrugell","direccion":"Carrer dels Còdols, 1, 17210 Calella de Palafrugell, Girona","lat":41.88865,"lng":3.18575,"precio":55},{"nombre":"Botín Restaurante","tipo":"Castillian","ciudad":"Madrid","direccion":"Calle de Cuchilleros, 17, 28005 Madrid","lat":40.41417,"lng":-3.70798,"precio":55},{"nombre":"El Molín de Mingo","tipo":"Asturian","ciudad":"Peruyes","direccion":"Barrio Peruyes, s/n, 33550 Cangas de Onís, Asturias","lat":43.38523,"lng":-5.08202,"precio":40},{"nombre":"El Pimpi","tipo":"Spanish-Japanese","ciudad":"Málaga","direccion":"Calle Granada, 62, 29015 Málaga","lat":36.7218,"lng":-4.41804,"precio":30},{"nombre":"La Penela","tipo":"Galician","ciudad":"Madrid","direccion":"Calle de la Reina Mercedes, 4, 28020 Madrid","lat":40.4505,"lng":-3.701,"precio":45},{"nombre":"Restaurante Marcano","tipo":"Basque","ciudad":"Madrid","direccion":"Calle del Doctor Castelo, 31, 28009 Madrid","lat":40.42043,"lng":-3.67532,"precio":55},{"nombre":"El Xampanyet","tipo":"Tapas Bar","ciudad":"Barcelona","direccion":"Carrer de Montcada, 22, 08003 Barcelona","lat":41.3845,"lng":2.18174,"precio":25},{"nombre":"Lena","tipo":"Asador","ciudad":"Marbella","direccion":"Calle de Ortiz de Molinillo, 1, 29602 Marbella, Málaga","lat":36.5096,"lng":-4.8829,"precio":60},{"nombre":"Garelos","tipo":"Galician","ciudad":"Madrid","direccion":"Calle de Alonso Cano, 59, 28003 Madrid","lat":40.4424,"lng":-3.69746,"precio":45},{"nombre":"Código de barra","tipo":"Creative Spanish","ciudad":"Cádiz","direccion":"Calle Plocia, 3, 11001 Cádiz","lat":36.52992,"lng":-6.29197,"precio":45},{"nombre":"Asturianos","tipo":"Astruian","ciudad":"Madrid","direccion":"Calle de Campomanes, 14, 28013 Madrid","lat":40.41898,"lng":-3.70931,"precio":40},{"nombre":"La Cuchara de San Lorenzo","tipo":"Tapas Bar","ciudad":"San Sebastián","direccion":"Calle Santa Korda, 4, 20003 Donostia-San Sebastián","lat":43.3238,"lng":-1.9757,"precio":30},{"nombre":"Nou Manolin","tipo":"Spanish","ciudad":"Alicante","direccion":"Calle Villegas, 3, 03001 Alicante","lat":38.34529,"lng":-0.48512,"precio":40},{"nombre":"La Manduca de Azagra","tipo":"Navarran","ciudad":"Madrid","direccion":"Calle de Sagasta, 14, 28004 Madrid","lat":40.42821,"lng":-3.69976,"precio":50},{"nombre":"El Restaurante del Candado Golf","tipo":"Small Plates","ciudad":"Barcelona","direccion":"Calle Cima del Puig, s/n, 08302 Mataró, Barcelona","lat":41.539,"lng":2.443,"precio":45},{"nombre":"La Mundana","tipo":"Gastrotapas","ciudad":"Barcelona","direccion":"Carrer de l'Autonomia, 68, 08029 Barcelona","lat":41.3768,"lng":2.13926,"precio":45},{"nombre":"Els Tres Porquets","tipo":"Creative Tapas","ciudad":"Barcelona","direccion":"Rambla del Poblenou, 165, 08018 Barcelona","lat":41.40706,"lng":2.19335,"precio":40},{"nombre":"Canalla Bistro by Ricard Camarena","tipo":"Valencian","ciudad":"València","direccion":"Carrer de Mossèn Femades, 4, 46002 València","lat":39.46881,"lng":-0.37464,"precio":45},{"nombre":"Surtopía","tipo":"Andalusian","ciudad":"Madrid","direccion":"Calle de Núñez de Balboa, 106, 28006 Madrid","lat":40.43537,"lng":-3.68183,"precio":40},{"nombre":"Piripi","tipo":"Mediterranean","ciudad":"Alicante","direccion":"Calle Óscar Esplá, 30, 03003 Alicante","lat":38.344,"lng":-0.482,"precio":45},{"nombre":"Tula","tipo":"Mediterranean","ciudad":"Javea","direccion":"Calle Dos de Maig, 7, 03730 Jávea, Alicante","lat":38.77068,"lng":0.19272,"precio":50},{"nombre":"El Lince","tipo":"Taberna-Offal","ciudad":"Madrid","direccion":"Calle de Luchana, 28, 28010 Madrid","lat":40.431,"lng":-3.69905,"precio":35},{"nombre":"Treze","tipo":"Market Cuisine-Game","ciudad":"Madrid","direccion":"Calle de San Gregorio, 13, 28004 Madrid","lat":40.42379,"lng":-3.69727,"precio":55},{"nombre":"Xiringuito Escribà","tipo":"Seafood-Rice","ciudad":"Barcelona","direccion":"Rambla del Poblenou, 40, 08005 Barcelona","lat":41.39956,"lng":2.2034,"precio":50},{"nombre":"Mar Mia","tipo":"Rice-Grill","ciudad":"Madrid","direccion":"Calle de la Fuente del Berro, 17, 28009 Madrid","lat":40.42385,"lng":-3.671,"precio":45},{"nombre":"La Taberna der Guerrita","tipo":"Andalusian-Sherry Cuisine","ciudad":"Sanlúcar de Barrameda","direccion":"Calle Trasbolsa, 2, 11540 Sanlúcar de Barrameda, Cádiz","lat":36.78146,"lng":-6.35227,"precio":30},{"nombre":"Arima Basque Gastronomy","tipo":"Basque","ciudad":"Madrid","direccion":"Calle del General Álvarez de Castro, 8, 28010 Madrid","lat":40.4328,"lng":-3.6975,"precio":55},{"nombre":"Puntarena","tipo":"Mexican Seafood","ciudad":"Madrid","direccion":"Calle del Infante, 2, 28014 Madrid","lat":40.41422,"lng":-3.69914,"precio":40},{"nombre":"The Alchemix","tipo":"Gastrobar-Cocktails","ciudad":"Barcelona","direccion":"Carrer de la Industria, 79, 08025 Barcelona","lat":41.4056,"lng":2.16892,"precio":35},{"nombre":"Toc al Mar","tipo":"Grill Cuisine","ciudad":"Begur","direccion":"Passeig de la Platja, s/n, 17255 Sa Riera, Begur, Girona","lat":41.9337,"lng":3.21631,"precio":60},{"nombre":"Casa Dani","tipo":"Spanish","ciudad":"Madrid","direccion":"Mercado de la Paz, Calle de Ayala, 28, 28001 Madrid","lat":40.42718,"lng":-3.68576,"precio":35},{"nombre":"Leña Madrid","tipo":"Steakhouse","ciudad":"Madrid","direccion":"Calle de Hermosilla, 6, 28001 Madrid","lat":40.42651,"lng":-3.68805,"precio":80},{"nombre":"Monocrom bistró & vins","tipo":"Mediterranean","ciudad":"Barcelona","direccion":"Carrer de la Llacuna, 114, 08018 Barcelona","lat":41.40376,"lng":2.1956,"precio":45},{"nombre":"La Fabrica","tipo":"Castillian","ciudad":"Burgos","direccion":"Calle del Almirante Bonifaz, 8, 09003 Burgos","lat":42.07698,"lng":-3.91757,"precio":40},{"nombre":"Tabanco El Pasaje","tipo":"Sherry Bar","ciudad":"Jerez de la Frontera","direccion":"Calle Santa María, 8, 11403 Jerez de la Frontera, Cádiz","lat":36.6828,"lng":-6.13634,"precio":20},{"nombre":"Chuka Ramen Bar","tipo":"Ramen","ciudad":"Madrid","direccion":"Calle de Echegaray, 9, 28014 Madrid","lat":40.4157,"lng":-3.69957,"precio":25},{"nombre":"Bar de Pla","tipo":"Wine Bar","ciudad":"Barcelona","direccion":"Carrer de la Montcada, 2, 08003 Barcelona","lat":41.385,"lng":2.1818,"precio":30},{"nombre":"El Fogón de Trifón","tipo":"Spanish","ciudad":"Madrid","direccion":"Calle de Fortuny, 9, 28010 Madrid","lat":40.4305,"lng":-3.69077,"precio":45},{"nombre":"Ultramarinos Quentin","tipo":"Mediterranean","ciudad":"Madrid","direccion":"Calle del Barquillo, 14, 28004 Madrid","lat":40.42094,"lng":-3.69561,"precio":40},{"nombre":"Misuto","tipo":"Sushi","ciudad":"Málaga","direccion":"Calle de Álamos, 9, 29012 Málaga","lat":36.7215,"lng":-4.4255,"precio":40},{"nombre":"La Bombi","tipo":"Spanish","ciudad":"Santander","direccion":"Calle Cisneros, 15, 39001 Santander, Cantabria","lat":43.46329,"lng":-3.81256,"precio":45},{"nombre":"El Baret de Miquel","tipo":"Mediterranean","ciudad":"Dénia","direccion":"Carrer del Marques de Campo, 39, 03700 Dénia, Alicante","lat":38.84108,"lng":0.11051,"precio":55},{"nombre":"Abastos 2.0","tipo":"Farm to Table-Tapas","ciudad":"Santiago de Compostela","direccion":"Calle Abastos, Parada 13, 15704 Santiago de Compostela, A Coruña","lat":42.87992,"lng":-8.54154,"precio":45},{"nombre":"Ronda 14","tipo":"Peruvian","ciudad":"Madrid","direccion":"Calle de la Huertas, 69, 28014 Madrid","lat":40.415,"lng":-3.6978,"precio":45},{"nombre":"Casa Manteca","tipo":"Taberna","ciudad":"Cádiz","direccion":"Calle Corralón de los Carros, 66, 11005 Cádiz","lat":36.53005,"lng":-6.30359,"precio":20},{"nombre":"Sense Pressa","tipo":"Catalan","ciudad":"Barcelona","direccion":"Carrer de Ginebra, 8, 08003 Barcelona","lat":41.38141,"lng":2.18774,"precio":45},{"nombre":"Bistroman Atelier","tipo":"French","ciudad":"Madrid","direccion":"Calle de los Reyes, 11, 28015 Madrid","lat":40.4241,"lng":-3.70943,"precio":50},{"nombre":"Glug","tipo":"Catalan-Italian","ciudad":"Barcelona","direccion":"Carrer de Blai, 36, 08004 Barcelona","lat":41.37399,"lng":2.16382,"precio":40}];
+
+// ── STORAGE ──
+const SK='mis_restaurantes_gps';let store={};
+try{const r=localStorage.getItem(SK);if(r)store=JSON.parse(r)}catch(e){}
+function save(){try{localStorage.setItem(SK,JSON.stringify(store))}catch(e){}}
+function gk(r){return r.nombre+'|'+r.ciudad}
+
+// ── INIT DATA ──
+const R=INITIAL_DATA.map((r,i)=>{const s=store[gk(r)]||{};return{...r,id:i,visitado:s.visitado||false,puntuacion:s.puntuacion||0}});
+function saveR(r){store[gk(r)]={visitado:r.visitado,puntuacion:r.puntuacion};save()}
+
+// ── MAP ──
+const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true,maxZoom:18,zoomSnap:0.5}).setView([39.8,-2.5],7);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:19}).addTo(map);
+
+// Simple layer group - no clustering, exact marker positions
+const ML=L.layerGroup().addTo(map);
+let MK={};
+
+// ── MARKERS ──
+let nearbyIds=new Set();
+function mkIcon(v,nb){
+  let c=v?'visit':'pend';if(nb&&!v)c='near';
+  const ic=v?'✓':nb&&!v?'●':'◆';
+  return L.divIcon({className:'custom-marker',html:'<div class="pin '+c+'"><span class="pin-i">'+ic+'</span></div>',iconSize:[28,36],iconAnchor:[14,36],popupAnchor:[0,-38]});
+}
+function popHTML(r){
+  var st=[1,2,3,4,5].map(function(n){
+    var a=n<=r.puntuacion?'on':'';var d=!r.visitado?'off':'';
+    return '<button class="star '+a+' '+d+'" onclick="setRate('+r.id+','+n+')" '+(d?'disabled':'')+'>★</button>';
+  }).join('');
+  var gmapsUrl='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(r.nombre+' '+r.direccion);
+  return '<div class="pop"><div class="pop-name">'+r.nombre+'</div><div class="pop-type">'+r.tipo+'</div><div class="pop-det"><span class="pop-det-ico">📍</span>'+r.ciudad+'</div><div class="pop-det"><span class="pop-det-ico">🏠</span>'+r.direccion+'</div><div class="pop-price">'+r.precio+'€ / pers</div><div class="pop-hr"></div><div class="pop-toggle"><span class="pop-toggle-label">¿He ido?</span><label class="tgl"><input type="checkbox" '+(r.visitado?'checked':'')+' onchange="toggleV('+r.id+',this.checked)"><span class="tgl-s"></span></label></div><div class="stars-lbl">Puntuación</div><div class="stars">'+st+'</div><a href="'+gmapsUrl+'" target="_blank" rel="noopener" class="pop-gmaps">📍 Abrir en Google Maps</a></div>';
+}
+// Create markers with lazy popup binding
+R.forEach(function(r){
+  var m=L.marker([r.lat,r.lng],{icon:mkIcon(r.visitado,false)});
+  m.on('click',function(){if(!m.getPopup()){m.bindPopup(popHTML(r),{maxWidth:280,minWidth:250});m.openPopup()}});
+  MK[r.id]=m;
+  ML.addLayer(m);
+});
+
+// ── INTERACTIONS ──
+window.toggleV=function(id,c){
+  const r=R[id];r.visitado=c;if(!c)r.puntuacion=0;saveR(r);
+  MK[id].setIcon(mkIcon(r.visitado,nearbyIds.has(id)));
+  if(MK[id].getPopup()){MK[id].setPopupContent(popHTML(r))}
+  refresh();
+};
+window.setRate=function(id,n){
+  const r=R[id];if(!r.visitado)return;
+  r.puntuacion=r.puntuacion===n?0:n;saveR(r);
+  if(MK[id].getPopup()){MK[id].setPopupContent(popHTML(r))}
+  updateRankings();
+};
+window.flyTo=function(id){
+  const r=R[id];
+  map.flyTo([r.lat,r.lng],15,{duration:.6});
+  setTimeout(function(){
+    if(!MK[id].getPopup())MK[id].bindPopup(popHTML(r),{maxWidth:280,minWidth:250});
+    MK[id].openPopup();
+  },700);
+  closeSheet();
+};
+
+// ── FILTER STATE ──
+let fSearch='',fCity='',fType='',fStatus='all',fMaxPrice=100;
+
+function getFiltered(){
+  return R.filter(function(r){
+    if(fSearch&&r.nombre.toLowerCase().indexOf(fSearch)===-1)return false;
+    if(fCity&&r.ciudad!==fCity)return false;
+    if(fType&&r.tipo!==fType)return false;
+    if(fStatus==='visited'&&!r.visitado)return false;
+    if(fStatus==='pending'&&r.visitado)return false;
+    if(r.precio>fMaxPrice)return false;
+    return true;
+  });
+}
+
+function applyFilters(){
+  ML.clearLayers();
+  var f=getFiltered();
+  f.forEach(function(r){ML.addLayer(MK[r.id])});
+  // Update stats everywhere
+  var v=R.filter(function(r){return r.visitado}).length;
+  var p=R.length-v;
+  document.querySelectorAll('.js-sp').forEach(function(e){e.textContent=p+' pendientes'});
+  document.querySelectorAll('.js-sv').forEach(function(e){e.textContent=v+' visitados'});
+  document.querySelectorAll('.js-ss').forEach(function(e){e.textContent=f.length+' mapa'});
+  updateList(f);
+}
+
+// ── BUILD FILTERS ──
+function buildFilterHTML(prefix){
+  var cities=[...new Set(R.map(function(r){return r.ciudad}))].sort();
+  var types=[...new Set(R.map(function(r){return r.tipo}))].sort();
+  var prices=R.map(function(r){return r.precio});
+  var minP=Math.min.apply(null,prices),maxP=Math.max.apply(null,prices);
+  fMaxPrice=maxP;
+  return '<div class="f-section"><div class="f-label">Buscar</div><div class="f-search-wrap"><input class="f-search js-search" placeholder="Nombre..." value=""></div></div>'+
+  '<div class="f-section"><div class="f-label">Ciudad</div><select class="f-select js-city"><option value="">Todas</option>'+cities.map(function(c){return'<option value="'+c+'">'+c+'</option>'}).join('')+'</select></div>'+
+  '<div class="f-section"><div class="f-label">Tipo</div><select class="f-select js-type"><option value="">Todos</option>'+types.map(function(t){return'<option value="'+t+'">'+t+'</option>'}).join('')+'</select></div>'+
+  '<div class="f-section"><div class="f-label">Estado</div><div class="f-pills"><button class="f-pill on js-status" data-s="all">Todos</button><button class="f-pill js-status" data-s="visited">Visitados</button><button class="f-pill js-status" data-s="pending">Pendientes</button></div></div>'+
+  '<div class="f-section"><div class="f-label">Presupuesto máximo</div><div class="f-price-val js-pricelbl">Hasta '+maxP+'€</div><input type="range" class="f-range js-price" min="'+minP+'" max="'+maxP+'" value="'+maxP+'"><div class="f-minmax"><span>'+minP+'€</span><span>'+maxP+'€</span></div></div>'+
+  '<div class="f-stats"><span class="s-pend js-sp">0 pendientes</span><span class="s-visit js-sv">0 visitados</span><span class="s-show js-ss">0 mapa</span></div>'+
+  '<button class="f-clear" onclick="clearF()">✕ Limpiar filtros</button>';
+}
+
+function syncAllFilters(){
+  // Sync values across mobile and desktop filter panels
+  document.querySelectorAll('.js-search').forEach(function(e){e.value=fSearch});
+  document.querySelectorAll('.js-city').forEach(function(e){e.value=fCity});
+  document.querySelectorAll('.js-type').forEach(function(e){e.value=fType});
+  document.querySelectorAll('.js-status').forEach(function(b){
+    b.classList.toggle('on',b.dataset.s===fStatus);
+  });
+  document.querySelectorAll('.js-price').forEach(function(e){e.value=fMaxPrice});
+  document.querySelectorAll('.js-pricelbl').forEach(function(e){e.textContent='Hasta '+fMaxPrice+'€'});
+}
+
+// Use event delegation on document for all filter interactions
+document.addEventListener('input',function(e){
+  if(e.target.classList.contains('js-search')){
+    fSearch=e.target.value.toLowerCase().trim();
+    syncAllFilters();applyFilters();
+  }
+  if(e.target.classList.contains('js-price')){
+    fMaxPrice=parseInt(e.target.value);
+    syncAllFilters();applyFilters();
+  }
+});
+document.addEventListener('change',function(e){
+  if(e.target.classList.contains('js-city')){
+    fCity=e.target.value;syncAllFilters();applyFilters();
+  }
+  if(e.target.classList.contains('js-type')){
+    fType=e.target.value;syncAllFilters();applyFilters();
+  }
+});
+document.addEventListener('click',function(e){
+  if(e.target.classList.contains('js-status')){
+    fStatus=e.target.dataset.s;
+    syncAllFilters();applyFilters();
+  }
+});
+
+window.clearF=function(){
+  fSearch='';fCity='';fType='';fStatus='all';
+  var prices=R.map(function(r){return r.precio});fMaxPrice=Math.max.apply(null,prices);
+  syncAllFilters();applyFilters();
+};
+
+function updateList(filtered){
+  var f=filtered||getFiltered();
+  var h='';
+  f.forEach(function(r){
+    var col=r.visitado?'var(--green)':nearbyIds.has(r.id)?'var(--blue)':'var(--gold)';
+    var st=r.visitado&&r.puntuacion>0?' · '+'★'.repeat(r.puntuacion):'';
+    h+='<div class="li" onclick="flyTo('+r.id+')"><span class="li-dot" style="background:'+col+'"></span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+st+'</div></div><span class="li-right">'+r.precio+'€</span></div>';
+  });
+  if(!h)h='<div class="li-empty">Sin resultados</div>';
+  var ml=document.getElementById('mobileList');if(ml)ml.innerHTML=h;
+  var dl=document.getElementById('deskList');if(dl)dl.innerHTML=h;
+}
+
+// ── RANKINGS ──
+var rkTab='top';
+window.setRkTab=function(el){
+  document.querySelectorAll('.rk-tab').forEach(function(t){t.classList.remove('on')});
+  el.classList.add('on');rkTab=el.dataset.rk;updateRankings();
+};
+function updateRankings(){
+  var rated=R.filter(function(r){return r.visitado&&r.puntuacion>0});
+  var el=document.getElementById('rkList');
+  if(!rated.length){el.innerHTML='<div class="li-empty">Aún no has puntuado ningún restaurante</div>';return}
+  var sorted;
+  if(rkTab==='top')sorted=rated.slice().sort(function(a,b){return b.puntuacion-a.puntuacion||a.precio-b.precio});
+  else sorted=rated.slice().sort(function(a,b){return(b.puntuacion/b.precio)-(a.puntuacion/a.precio)});
+  var h='';
+  sorted.slice(0,15).forEach(function(r,i){
+    var pc=i===0?'p1':i===1?'p2':i===2?'p3':'';
+    var sc=rkTab==='top'?'★'.repeat(r.puntuacion):'★'.repeat(r.puntuacion)+' · '+r.precio+'€';
+    h+='<div class="li" onclick="flyTo('+r.id+')"><span class="rk-pos '+pc+'">'+(i+1)+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><span class="li-right">'+sc+'</span></div>';
+  });
+  el.innerHTML=h;
+}
+
+// ── GEOLOCATION ──
+var uLat=null,uLng=null,uMarker=null,uCircle=null,nbRadius=10;
+function haversine(a,b,c,d){var RR=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return RR*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
+
+window.locateMe=function(){
+  var btn=document.getElementById('locateBtn');
+  var statusEl=document.getElementById('nbStatus');
+  if(!navigator.geolocation){statusEl.textContent='No disponible';return}
+  btn.classList.add('loading');
+  statusEl.textContent='Buscando...';
+  
+  navigator.geolocation.getCurrentPosition(function(p){
+    btn.classList.remove('loading');
+    uLat=p.coords.latitude;
+    uLng=p.coords.longitude;
+    
+    // Remove old
+    if(uMarker){map.removeLayer(uMarker)}
+    if(uCircle){map.removeLayer(uCircle)}
+    
+    // User marker — added directly to map, NOT to cluster layer
+    uMarker=L.marker([uLat,uLng],{
+      icon:L.divIcon({className:'custom-marker',html:'<div class="user-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]}),
+      zIndexOffset:9999,
+      interactive:false
+    }).addTo(map);
+    
+    // Radius circle
+    uCircle=L.circle([uLat,uLng],{radius:nbRadius*1000,color:'#4285F4',fillColor:'#4285F4',fillOpacity:.05,weight:1.5,dashArray:'6 4',interactive:false}).addTo(map);
+    
+    map.setView([uLat,uLng],13);
+    statusEl.textContent='Ubicación OK ✓';
+    updateNearby();
+    if(window.innerWidth<=768)openSheet('nearby');
+    
+  },function(err){
+    btn.classList.remove('loading');
+    if(err.code===1)statusEl.textContent='Permiso denegado';
+    else statusEl.textContent='Error de ubicación';
+  },{enableHighAccuracy:true,timeout:30000,maximumAge:0});
+};
+
+function updateNearby(){
+  var el=document.getElementById('nearbyList');
+  var old=new Set(nearbyIds);nearbyIds=new Set();
+  if(uLat===null){
+    el.innerHTML='<div class="li-empty">Pulsa 📍 en el mapa para ver restaurantes cerca</div>';
+    old.forEach(function(id){MK[id].setIcon(mkIcon(R[id].visitado,false))});
+    return;
+  }
+  if(uCircle)uCircle.setRadius(nbRadius*1000);
+  var near=R.map(function(r){return{id:r.id,nombre:r.nombre,tipo:r.tipo,ciudad:r.ciudad,precio:r.precio,visitado:r.visitado,puntuacion:r.puntuacion,dist:haversine(uLat,uLng,r.lat,r.lng)}})
+    .filter(function(r){return r.dist<=nbRadius})
+    .sort(function(a,b){return a.dist-b.dist});
+  near.forEach(function(r){nearbyIds.add(r.id)});
+  // Reset old markers, set new nearby markers
+  old.forEach(function(id){if(!nearbyIds.has(id))MK[id].setIcon(mkIcon(R[id].visitado,false))});
+  nearbyIds.forEach(function(id){MK[id].setIcon(mkIcon(R[id].visitado,true))});
+  if(!near.length){el.innerHTML='<div class="li-empty">No hay restaurantes en '+nbRadius+' km</div>';return}
+  var h='';
+  near.forEach(function(r){
+    var d=r.dist<1?(r.dist*1000).toFixed(0)+' m':r.dist.toFixed(1)+' km';
+    var gurl='https://www.google.com/maps/dir/?api=1&destination='+R[r.id].lat+','+R[r.id].lng+'&travelmode=walking';
+    h+='<div class="li" onclick="flyTo('+r.id+')"><span class="nb-dist">'+d+'</span><div class="li-info"><div class="li-name">'+r.nombre+'</div><div class="li-meta">'+r.ciudad+' · '+r.tipo+'</div></div><a href="'+gurl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:18px;text-decoration:none;flex-shrink:0;padding:4px">🧭</a><span class="li-right">'+r.precio+'€</span></div>';
+  });
+  el.innerHTML=h;
+}
+
+document.getElementById('nbRange').addEventListener('input',function(){
+  nbRadius=parseInt(this.value);
+  document.getElementById('nbRadiusDisplay').textContent='Radio: '+nbRadius+' km';
+  // Update track visual
+  var pct=((nbRadius-1)/49)*100;
+  this.style.background='linear-gradient(to right,#4285F4 '+pct+'%,#2a2a32 '+pct+'%)';
+  updateNearby();
+});
+
+// ── SHEETS ──
+var activeSheet=null;
+window.openSheet=function(name){
+  closeSheet();
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active')});
+  var btns=document.querySelectorAll('.nav-btn');
+  var idx={filters:0,list:1,nearby:2,rankings:3,add:4}[name];
+  if(btns[idx])btns[idx].classList.add('active');
+  var s=document.getElementById('sheet-'+name);
+  if(s){
+    s.classList.add('on');
+    document.getElementById('overlay').classList.add('on');
+    activeSheet=name;
+    // Force list update when opening list
+    if(name==='list')updateList();
+    if(name==='rankings')updateRankings();
+  }
+};
+window.closeSheet=function(){
+  document.querySelectorAll('.sheet').forEach(function(s){s.classList.remove('on')});
+  document.getElementById('overlay').classList.remove('on');
+  activeSheet=null;
+};
+
+// ── ADD RESTAURANT ──
+window.addRestaurant=function(){
+  var name=document.getElementById('addName').value.trim();
+  var city=document.getElementById('addCity').value.trim();
+  var addr=document.getElementById('addAddr').value.trim();
+  var type=document.getElementById('addType').value.trim()||'Spanish';
+  var price=parseFloat(document.getElementById('addPrice').value)||30;
+  var mapsLink=document.getElementById('addMaps').value.trim();
+  var msgEl=document.getElementById('addMsg');
+
+  if(!name||!city||!addr){
+    msgEl.style.display='block';msgEl.style.color='#e44';
+    msgEl.textContent='Rellena nombre, ciudad y dirección';return;
+  }
+
+  // Extract coords from Google Maps link
+  var lat=null,lng=null;
+
+  // Try patterns: @41.123,2.456 or q=41.123,2.456 or /41.123,2.456
+  var patterns=[
+    /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /\/(-?\d+\.\d{4,}),(-?\d+\.\d{4,})/,
+    /place\/[^\/]+\/(-?\d+\.?\d*),(-?\d+\.?\d*)/
+  ];
+
+  for(var i=0;i<patterns.length;i++){
+    var m=mapsLink.match(patterns[i]);
+    if(m){lat=parseFloat(m[1]);lng=parseFloat(m[2]);break}
+  }
+
+  // If no coords found from link, use city center as fallback
+  if(!lat||!lng||isNaN(lat)||isNaN(lng)){
+    // Try to find a restaurant in same city and use nearby coords
+    var sameCity=R.filter(function(r){return r.ciudad.toLowerCase()===city.toLowerCase()});
+    if(sameCity.length>0){
+      lat=sameCity[0].lat+0.001*(Math.random()-0.5);
+      lng=sameCity[0].lng+0.001*(Math.random()-0.5);
+      msgEl.style.display='block';msgEl.style.color='var(--gold2)';
+      msgEl.textContent='⚠️ No se pudieron extraer coordenadas del enlace. Se usó ubicación aproximada de '+city+'. El link de Google Maps sí funcionará bien.';
+    }else{
+      lat=40.0;lng=-3.0;
+      msgEl.style.display='block';msgEl.style.color='#e44';
+      msgEl.textContent='No se encontraron coordenadas. Pega un enlace de Google Maps válido.';
+      return;
+    }
+  }else{
+    msgEl.style.display='block';msgEl.style.color='var(--green)';
+    msgEl.textContent='✅ '+name+' añadido correctamente!';
+  }
+
+  // Create new restaurant
+  var newR={
+    nombre:name,tipo:type,ciudad:city,direccion:addr,
+    lat:lat,lng:lng,precio:price,id:R.length,visitado:false,puntuacion:0
+  };
+  R.push(newR);
+
+  // Save to localStorage
+  saveR(newR);
+  // Also save the full new restaurant data
+  var customKey='custom_restaurants';
+  var custom=[];
+  try{var raw=localStorage.getItem(customKey);if(raw)custom=JSON.parse(raw)}catch(e){}
+  custom.push({nombre:name,tipo:type,ciudad:city,direccion:addr,lat:lat,lng:lng,precio:price});
+  try{localStorage.setItem(customKey,JSON.stringify(custom))}catch(e){}
+
+  // Add marker
+  var mk=L.marker([lat,lng],{icon:mkIcon(false,false)});
+  mk.on('click',function(){if(!mk.getPopup()){mk.bindPopup(popHTML(newR),{maxWidth:280,minWidth:250});mk.openPopup()}});
+  MK[newR.id]=mk;
+  ML.addLayer(mk);
+
+  // Clear form
+  document.getElementById('addName').value='';
+  document.getElementById('addCity').value='';
+  document.getElementById('addAddr').value='';
+  document.getElementById('addType').value='';
+  document.getElementById('addPrice').value='';
+  document.getElementById('addMaps').value='';
+
+  // Refresh filters and lists
+  refresh();
+
+  // Fly to new marker
+  setTimeout(function(){map.setView([lat,lng],14)},500);
+};
+
+function refresh(){applyFilters();updateNearby();updateRankings()}
+
+// ── INIT ──
+// Build filter HTML in both containers
+var filterHTML=buildFilterHTML();
+var mf=document.getElementById('mobileFilters');if(mf)mf.innerHTML=filterHTML;
+var df=document.getElementById('deskFilters');if(df)df.innerHTML=filterHTML;
+
+// Initial render
+// Load custom restaurants from localStorage
+try{
+  var customRaw=localStorage.getItem('custom_restaurants');
+  if(customRaw){
+    var custom=JSON.parse(customRaw);
+    custom.forEach(function(c){
+      var s=store[c.nombre+'|'+c.ciudad]||{};
+      var newR={nombre:c.nombre,tipo:c.tipo,ciudad:c.ciudad,direccion:c.direccion,lat:c.lat,lng:c.lng,precio:c.precio,id:R.length,visitado:s.visitado||false,puntuacion:s.puntuacion||0};
+      R.push(newR);
+      var mk=L.marker([newR.lat,newR.lng],{icon:mkIcon(newR.visitado,false)});
+      mk.on('click',function(){if(!mk.getPopup()){mk.bindPopup(popHTML(newR),{maxWidth:280,minWidth:250});mk.openPopup()}});
+      MK[newR.id]=mk;
+      ML.addLayer(mk);
+    });
+  }
+}catch(e){}
+
+applyFilters();
+updateNearby();
+updateRankings();
+
+// Fix Leaflet size on mobile after everything loads
+setTimeout(function(){map.invalidateSize()},100);
+// Set initial gradient on nearby range
+var nbr=document.getElementById('nbRange');if(nbr){var p=((10-1)/49)*100;nbr.style.background='linear-gradient(to right,#4285F4 '+p+'%,#2a2a32 '+p+'%)'}
+</script>
+</body>
+</html>
