@@ -52,6 +52,7 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif
 .f-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:6px}
 .f-search{width:100%;padding:11px 12px 11px 36px;background:var(--input);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:16px;font-family:inherit;outline:none}
 .f-search:focus{border-color:var(--gold)}
+#sheet-add .f-search{padding-left:12px}
 .f-search-wrap{position:relative}
 .f-search-wrap::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px}
 .f-select{width:100%;padding:11px 12px;background:var(--input);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:15px;font-family:inherit;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a5a62' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
@@ -287,7 +288,18 @@ function saveR(r){store[gk(r)]={visitado:r.visitado,puntuacion:r.puntuacion};sav
 
 // ── MAP ──
 const map=L.map('map',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true,maxZoom:18,zoomSnap:0.5}).setView([39.8,-2.5],7);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© OSM © CARTO',maxZoom:19}).addTo(map);
+// Tiles: OpenStreetMap (sin API key). Si falla, cambia automáticamente a Esri.
+var tilesOSM=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
+var tilesEsri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19});
+var tileOk=0,tileErr=0,usingFallback=false;
+tilesOSM.on('tileload',function(){tileOk++});
+tilesOSM.on('tileerror',function(){
+  tileErr++;
+  if(!usingFallback&&tileOk===0&&tileErr>=4){
+    usingFallback=true;map.removeLayer(tilesOSM);tilesEsri.addTo(map);
+  }
+});
+tilesOSM.addTo(map);
 
 // Simple layer group - no clustering, exact marker positions
 const ML=L.layerGroup().addTo(map);
