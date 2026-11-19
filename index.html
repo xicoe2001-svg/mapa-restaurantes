@@ -390,7 +390,9 @@ osm.on('tileerror',function(){badT++;if(!swapped&&okT===0&&badT>=4){swapped=true
 osm.addTo(map);
 
 /* capa de marcadores sobre canvas: 300+ puntos sin castigar el movil */
-var canvas=L.canvas({padding:.4});
+/* tolerance ensancha SOLO la zona sensible al dedo, no el dibujo:
+   radio 8.5 + 14 de margen ≈ 46 px de diana, lo que pide iOS */
+var canvas=L.canvas({padding:.4,tolerance:14});
 var layer=L.layerGroup().addTo(map);
 var MK={}, nearSet={};
 
@@ -400,14 +402,27 @@ function paint(r){
   var m=MK[r.id]; if(!m) return;
   m.setStyle({fillColor:tone(r)});
 }
+/* El punto crece con el zoom: pequeño en vista de España para no emborronar,
+   grande de cerca, que es cuando lo vas a tocar. */
+function sizeAt(z){ return z<=6?6 : z<=8?7 : z<=10?8 : z<=12?9 : 10; }
+var curSize=0;
+function resize(){
+  var s=sizeAt(map.getZoom());
+  if(s===curSize) return;
+  curSize=s;
+  for(var i=0;i<R.length;i++){ var m=MK[R[i].id]; if(m) m.setRadius(s); }
+}
+map.on('zoomend',resize);
+
 function build(r){
   /* anillo blanco: legible sobre el mapa claro y sin emborronarse al juntarse */
-  var m=L.circleMarker([r.la,r.lo],{renderer:canvas,radius:6,weight:2,
-    color:'#FFFFFF',opacity:.95,fillColor:tone(r),fillOpacity:1,bubblingMouseEvents:false});
+  var m=L.circleMarker([r.la,r.lo],{renderer:canvas,radius:curSize||sizeAt(map.getZoom()),
+    weight:2,color:'#FFFFFF',opacity:.95,fillColor:tone(r),fillOpacity:1,bubblingMouseEvents:false});
   m.on('click',function(){open(r.id);});
   MK[r.id]=m; return m;
 }
 for(var i=0;i<R.length;i++) build(R[i]);
+resize();
 
 /* ════════ popup ════════ */
 function popHTML(r){
