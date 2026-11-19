@@ -16,8 +16,17 @@
   --ink:#0E0F11; --surface:#17181B; --raised:#1F2126; --field:#24262B;
   --line:#2C2F36; --text:#ECEAE5; --dim:#8B8F97; --faint:#5A5E66;
   --gold:#C8912F; --gold-lt:#E3AE4E; --green:#3C8F4A; --blue:#3B7DD8;
+  --glass:23,24,27; --fade:14,15,17; --scrim:rgba(0,0,0,.55);
+  --on-gold:#17120A; --shadow:.45; --hair:rgba(255,255,255,.055);
   --nav-h:calc(57px + env(safe-area-inset-bottom,0));
   --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+:root[data-theme="light"]{
+  --ink:#F4F2EE; --surface:#FFFFFF; --raised:#F2EFE9; --field:#EDEAE3;
+  --line:#DEDAD1; --text:#1A1917; --dim:#6C6962; --faint:#9B968D;
+  --gold:#B07C1F; --gold-lt:#8E6413; --green:#2E7D3F; --blue:#2A68C8;
+  --glass:255,255,255; --fade:244,242,238; --scrim:rgba(26,22,16,.32);
+  --on-gold:#FFFFFF; --shadow:.14; --hair:rgba(0,0,0,.07);
 }
 html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
   font-family:var(--sys);font-size:16px;line-height:1.45;
@@ -31,20 +40,20 @@ html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
 /* ───── top bar ───── */
 .topbar{position:fixed;top:0;left:0;right:0;z-index:700;display:flex;align-items:center;
   gap:10px;padding:calc(env(safe-area-inset-top,0) + 10px) 14px 10px;
-  background:linear-gradient(180deg,rgba(14,15,17,.94) 0%,rgba(14,15,17,.72) 62%,rgba(14,15,17,0) 100%);
+  background:linear-gradient(180deg,rgba(var(--fade),.95) 0%,rgba(var(--fade),.74) 62%,rgba(var(--fade),0) 100%);
   pointer-events:none}
 .mark{display:flex;align-items:baseline;gap:5px;pointer-events:auto}
 .mark b{font-size:17px;font-weight:800;letter-spacing:.14em;color:var(--text)}
 .mark span{font-size:17px;font-weight:300;letter-spacing:.14em;color:var(--gold-lt)}
 .count{margin-left:auto;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;
-  background:rgba(23,24,27,.82);border:1px solid var(--line);border-radius:999px;
+  background:rgba(var(--glass),.84);border:1px solid var(--line);border-radius:999px;
   padding:4px 10px;pointer-events:auto;backdrop-filter:blur(8px)}
 
 /* ───── map buttons ───── */
 .map-btn{position:fixed;z-index:700;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);
-  background:rgba(23,24,27,.9);color:var(--text);font-size:19px;display:flex;align-items:center;
+  background:rgba(var(--glass),.92);color:var(--text);font-size:19px;display:flex;align-items:center;
   justify-content:center;cursor:pointer;backdrop-filter:blur(8px);
-  box-shadow:0 6px 18px rgba(0,0,0,.45);transition:background .15s,transform .1s}
+  box-shadow:0 6px 18px rgba(0,0,0,var(--shadow));transition:background .15s,transform .1s}
 .map-btn:active{transform:scale(.94);background:var(--raised)}
 #locateBtn{right:14px;bottom:calc(var(--nav-h) + 14px)}
 #locateBtn.on{border-color:var(--blue);color:var(--blue)}
@@ -53,7 +62,7 @@ html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
 
 /* ───── bottom nav ───── */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:860;display:flex;
-  background:rgba(23,24,27,.94);backdrop-filter:blur(14px);
+  background:rgba(var(--glass),.95);backdrop-filter:blur(14px);
   border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0)}
 .nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:9px 2px 8px;border:0;background:none;color:var(--faint);
@@ -64,14 +73,14 @@ html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
 .nav .dot{position:absolute;top:7px;margin-left:15px;width:5px;height:5px;border-radius:50%;background:var(--gold)}
 
 /* ───── sheet ───── */
-.scrim{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.55);opacity:0;
+.scrim{position:fixed;inset:0;z-index:800;background:var(--scrim);opacity:0;
   pointer-events:none;transition:opacity .22s}
 .scrim.open{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:var(--nav-h);z-index:810;background:var(--surface);
   border-top:1px solid var(--line);border-radius:18px 18px 0 0;
   max-height:calc(86dvh - var(--nav-h));display:flex;flex-direction:column;overflow:hidden;
   transform:translateY(calc(100% + 90px));transition:transform .3s cubic-bezier(.32,.72,0,1);
-  box-shadow:0 -12px 40px rgba(0,0,0,.5)}
+  box-shadow:0 -12px 40px rgba(0,0,0,var(--shadow))}
 .sheet.open{transform:translateY(0)}
 .scrim{bottom:var(--nav-h)}
 .grab{flex-shrink:0;padding:9px 0 3px;text-align:center;cursor:grab;touch-action:none}
@@ -101,7 +110,7 @@ html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);
 .seg button{flex:1;padding:11px 4px;border-radius:10px;border:1px solid var(--line);
   background:var(--field);color:var(--dim);font-size:13.5px;font-family:inherit;
   cursor:pointer;transition:all .15s}
-.seg button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#17120A;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--on-gold);font-weight:600}
 
 /* range */
 .cap{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}
@@ -111,9 +120,9 @@ input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:5px;
   border-radius:3px;outline:none;background:var(--field)}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;
   border-radius:50%;background:var(--gold);border:4px solid var(--surface);
-  box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:grab}
+  box-shadow:0 2px 8px rgba(0,0,0,var(--shadow));cursor:grab}
 input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:var(--gold);
-  border:4px solid var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:grab}
+  border:4px solid var(--surface);box-shadow:0 2px 8px rgba(0,0,0,var(--shadow));cursor:grab}
 #nbRange::-webkit-slider-thumb{background:var(--blue)}
 #nbRange::-moz-range-thumb{background:var(--blue)}
 .ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);margin-top:6px}
@@ -128,7 +137,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
   font-size:13.5px;font-family:inherit;cursor:pointer;transition:all .15s}
 .ghost:active{border-color:var(--gold);color:var(--text)}
 .cta{display:block;width:calc(100% - 36px);margin:4px 18px 18px;padding:14px;
-  background:var(--gold);border:0;border-radius:12px;color:#17120A;font-size:15.5px;
+  background:var(--gold);border:0;border-radius:12px;color:var(--on-gold);font-size:15.5px;
   font-weight:650;font-family:inherit;cursor:pointer}
 .cta:active{background:var(--gold-lt)}
 .note{padding:0 18px 16px;font-size:12.5px;line-height:1.5;color:var(--dim)}
@@ -136,7 +145,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 
 /* ───── rows ───── */
 .row{display:flex;align-items:center;gap:11px;padding:11px 18px;cursor:pointer;
-  border-bottom:1px solid rgba(255,255,255,.045);min-height:58px}
+  border-bottom:1px solid var(--hair);min-height:58px}
 .row:active{background:var(--raised)}
 .pip{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .rank{width:20px;flex-shrink:0;text-align:center;font-size:13px;font-weight:650;
@@ -163,7 +172,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 
 /* ───── popup ───── */
 .leaflet-popup-content-wrapper{background:var(--surface)!important;border:1px solid var(--line)!important;
-  border-radius:15px!important;box-shadow:0 14px 44px rgba(0,0,0,.6)!important;padding:0!important}
+  border-radius:15px!important;box-shadow:0 14px 44px rgba(0,0,0,var(--shadow))!important;padding:0!important}
 .leaflet-popup-content{margin:0!important;width:268px!important;font-family:var(--sys)!important;
   color:var(--text)!important;line-height:1.45!important}
 .leaflet-popup-tip{background:var(--surface)!important;border:1px solid var(--line)!important;box-shadow:none!important}
@@ -204,7 +213,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 /* los controles de Leaflet van a z-index 1000 por defecto y se comen la barra inferior */
 .leaflet-top,.leaflet-bottom{z-index:600!important}
 .leaflet-control-zoom{display:none}
-.leaflet-control-attribution{background:rgba(14,15,17,.72)!important;color:var(--faint)!important;
+.leaflet-control-attribution{background:rgba(var(--glass),.8)!important;color:var(--faint)!important;
   font-size:9px!important;padding:1px 5px!important}
 .leaflet-control-attribution a{color:var(--dim)!important}
 .me{width:15px;height:15px;border-radius:50%;background:var(--blue);
@@ -286,12 +295,20 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
         <p style="font-size:12px;color:var(--faint);margin-top:9px;line-height:1.45">
           Filtra por el techo del rango: verás los sitios donde no te pasarás de esa cifra.</p>
       </div>
-      <div class="fld"><label>Estilo del mapa</label>
-        <div class="seg" id="styleRow">
-          <button data-m="dark" aria-pressed="true">Oscuro</button>
-          <button data-m="light" aria-pressed="false">Claro</button>
-          <button data-m="osm" aria-pressed="false">Detallado</button>
+      <div class="fld"><label>Tema</label>
+        <div class="seg" id="themeRow">
+          <button data-th="dark" aria-pressed="true">Oscuro</button>
+          <button data-th="light" aria-pressed="false">Claro</button>
+          <button data-th="auto" aria-pressed="false">Auto</button>
         </div></div>
+      <div class="fld"><label>Mapa</label>
+        <div class="seg" id="styleRow">
+          <button data-m="min" aria-pressed="true">Minimalista</button>
+          <button data-m="detail" aria-pressed="false">Detallado</button>
+        </div>
+        <p style="font-size:12px;color:var(--faint);margin-top:9px;line-height:1.45">
+          El minimalista es un lienzo gris sin rótulos de calle. El detallado trae
+          el callejero completo.</p></div>
       <div class="stats">
         <div class="stat y"><b id="sPend">0</b><span>pendientes</span></div>
         <div class="stat g"><b id="sVis">0</b><span>visitados</span></div>
@@ -397,43 +414,70 @@ function esriLayer(name){
   return L.tileLayer(ESRI+name+'/MapServer/tile/{z}/{y}/{x}',
     {maxZoom:18,maxNativeZoom:16,attribution:'Esri, HERE, © OpenStreetMap'});
 }
-var STYLES={
-  dark :{label:'Oscuro', base:function(){return esriLayer('World_Dark_Gray_Base');},
-         ref:function(){return esriLayer('World_Dark_Gray_Reference');}, filter:'', bg:'#262629'},
-  light:{label:'Claro',  base:function(){return esriLayer('World_Light_Gray_Base');},
-         ref:function(){return esriLayer('World_Light_Gray_Reference');}, filter:'', bg:'#D8D8D6'},
-  osm  :{label:'Detallado',
-         base:function(){return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-           {maxZoom:19,attribution:'© OpenStreetMap'});},
-         ref:null, filter:'invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.35)',
-         bg:'#1A1A1D'}
-};
-var styleKey='dark';
-try{var sv=localStorage.getItem('oad_style'); if(sv&&STYLES[sv]) styleKey=sv;}catch(e){}
+var OSM_URL='https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+function osmLayer(){return L.tileLayer(OSM_URL,{maxZoom:19,attribution:'© OpenStreetMap'});}
+
+/* Dos ajustes independientes:
+   tema  = oscuro / claro / auto  -> colores de TODA la interfaz
+   mapMode = min / detail         -> lienzo gris de Esri o callejero de OSM   */
+var theme='dark', mapMode='min', isLight=false;
+try{
+  var t=localStorage.getItem('oad_theme'); if(t) theme=t;
+  var m=localStorage.getItem('oad_map');   if(m) mapMode=m;
+}catch(e){}
+
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: light)'):null;
+function resolveTheme(){ return theme==='auto' ? !!(mq&&mq.matches) : theme==='light'; }
 
 var baseL=null, refL=null, probeOk=0, probeBad=0, fellBack=false;
-function applyStyle(k,remember){
-  var S=STYLES[k]; if(!S) return;
-  styleKey=k;
-  if(remember){try{localStorage.setItem('oad_style',k);}catch(e){}}
-  if(baseL) map.removeLayer(baseL);
-  if(refL){map.removeLayer(refL); refL=null;}
-  document.querySelector('.leaflet-tile-pane').style.filter=S.filter;
-  document.getElementById('map').style.background=S.bg;
+
+function applyLook(remember){
+  isLight=resolveTheme();
+  document.documentElement.setAttribute('data-theme',isLight?'light':'dark');
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content',isLight?'#F4F2EE':'#0E0F11');
+
+  if(remember){try{
+    localStorage.setItem('oad_theme',theme);
+    localStorage.setItem('oad_map',mapMode);
+  }catch(e){}}
+
+  if(baseL){map.removeLayer(baseL);baseL=null;}
+  if(refL){map.removeLayer(refL);refL=null;}
+
+  var pane=document.querySelector('.leaflet-tile-pane');
+  if(mapMode==='detail'){
+    /* OSM es un mapa claro: en tema oscuro lo invertimos para que no deslumbre */
+    pane.style.filter=isLight?'saturate(.72) brightness(1.02)'
+      :'invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.35)';
+    document.getElementById('map').style.background=isLight?'#E8E4DC':'#1A1A1D';
+    baseL=osmLayer();
+  }else{
+    pane.style.filter='';
+    document.getElementById('map').style.background=isLight?'#D9D7D2':'#262629';
+    baseL=esriLayer(isLight?'World_Light_Gray_Base':'World_Dark_Gray_Base');
+    refL=esriLayer(isLight?'World_Light_Gray_Reference':'World_Dark_Gray_Reference');
+  }
   probeOk=0; probeBad=0;
-  baseL=S.base();
   baseL.on('tileload',function(){probeOk++;});
   baseL.on('tileerror',function(){
     probeBad++;
-    /* si el servidor no responde a las primeras, nos pasamos a OSM antes de
-       dejarle la pantalla en blanco */
-    if(!fellBack && k!=='osm' && probeOk===0 && probeBad>=5){fellBack=true;applyStyle('osm',false);}
+    /* si Esri no responde a las primeras, al callejero antes que a una pantalla en blanco */
+    if(!fellBack && mapMode==='min' && probeOk===0 && probeBad>=5){
+      fellBack=true; mapMode='detail'; applyLook(false);
+    }
   });
   baseL.addTo(map);
-  if(S.ref){refL=S.ref(); refL.addTo(map);}
-  var box=document.getElementById('styleRow');
-  if(box){var bs=box.querySelectorAll('button');
-    for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',bs[i].dataset.m===k);}
+  if(refL) refL.addTo(map);
+
+  press('themeRow','th',theme);
+  press('styleRow','m',mapMode);
+  recolour();
+}
+function press(id,attr,val){
+  var box=document.getElementById(id); if(!box) return;
+  var bs=box.querySelectorAll('button');
+  for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',bs[i].dataset[attr]===val);
 }
 
 /* capa de marcadores sobre canvas: 300+ puntos sin castigar el movil */
@@ -443,7 +487,14 @@ var canvas=L.canvas({padding:.4,tolerance:14});
 var layer=L.layerGroup().addTo(map);
 var MK={}, nearSet={};
 
+/* Dos paletas: sobre lienzo oscuro hace falta mas luz; sobre el claro, mas cuerpo */
 var C_PEND='#D9A441', C_VIS='#45A357', C_NEAR='#4A8FE7';
+function recolour(){
+  if(isLight){ C_PEND='#B07C1F'; C_VIS='#2E7D3F'; C_NEAR='#2A68C8'; }
+  else       { C_PEND='#D9A441'; C_VIS='#45A357'; C_NEAR='#4A8FE7'; }
+  for(var i=0;i<R.length;i++) paint(R[i]);
+  if(ring) ring.setStyle({color:C_NEAR,fillColor:C_NEAR});
+}
 function tone(r){return r.been?C_VIS:(nearSet[r.id]?C_NEAR:C_PEND);}
 function paint(r){
   var m=MK[r.id]; if(!m) return;
@@ -827,10 +878,20 @@ document.getElementById('btnAdd').onclick=function(){
 };
 function val(id){return document.getElementById(id).value.trim();}
 
+document.getElementById('themeRow').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-th]'); if(!b) return;
+  theme=b.dataset.th; fellBack=false; applyLook(true); refresh();
+});
 document.getElementById('styleRow').addEventListener('click',function(e){
   var b=e.target.closest('button[data-m]'); if(!b) return;
-  fellBack=false; applyStyle(b.dataset.m,true);
+  mapMode=b.dataset.m; fellBack=false; applyLook(true);
 });
+/* con el tema en Auto, seguimos al sistema si cambia a mitad de uso */
+if(mq){
+  var onSys=function(){ if(theme==='auto'){applyLook(false);refresh();} };
+  if(mq.addEventListener) mq.addEventListener('change',onSys);
+  else if(mq.addListener) mq.addListener(onSys);
+}
 
 /* La barra inferior cambia de alto segun el notch: la medimos en vez de suponerla,
    asi la hoja encaja justo encima sin dejar ver una franja de mapa. */
@@ -840,7 +901,7 @@ function syncNav(){
 }
 
 /* ════════ arranque ════════ */
-applyStyle(styleKey,false);
+applyLook(false);
 syncNav();
 refresh();
 if(isDesk()) go('lista');
