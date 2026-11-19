@@ -286,6 +286,12 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
         <p style="font-size:12px;color:var(--faint);margin-top:9px;line-height:1.45">
           Filtra por el techo del rango: verás los sitios donde no te pasarás de esa cifra.</p>
       </div>
+      <div class="fld"><label>Estilo del mapa</label>
+        <div class="seg" id="styleRow">
+          <button data-m="dark" aria-pressed="true">Oscuro</button>
+          <button data-m="light" aria-pressed="false">Claro</button>
+          <button data-m="osm" aria-pressed="false">Detallado</button>
+        </div></div>
       <div class="stats">
         <div class="stat y"><b id="sPend">0</b><span>pendientes</span></div>
         <div class="stat g"><b id="sVis">0</b><span>visitados</span></div>
@@ -380,14 +386,55 @@ var map=L.map('map',{zoomControl:true,preferCanvas:true,zoomSnap:.5,
   minZoom:5,maxZoom:18,attributionControl:false}).setView([40.1,-3.4],6);
 L.control.attribution({prefix:false,position:'bottomleft'}).addTo(map);
 
-var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'© OpenStreetMap',maxZoom:19,crossOrigin:true});
-var esri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-  {attribution:'© Esri',maxZoom:19});
-var okT=0,badT=0,swapped=false;
-osm.on('tileload',function(){okT++;});
-osm.on('tileerror',function(){badT++;if(!swapped&&okT===0&&badT>=4){swapped=true;map.removeLayer(osm);esri.addTo(map);}});
-osm.addTo(map);
+/* ── estilos de mapa ──
+   Esri Canvas es un lienzo gris casi sin color: deja que manden los puntos.
+   Sus etiquetas solo llegan al nivel 10, asi que a pie de calle no hay rotulos;
+   para eso esta el boton de Google Maps de cada ficha.
+   "Detallado" es OpenStreetMap con un filtro oscuro: menos elegante, con todo
+   el callejero. Si Esri fallara, se cae solo a ese. */
+var ESRI='https://services.arcgisonline.com/arcgis/rest/services/Canvas/';
+function esriLayer(name){
+  return L.tileLayer(ESRI+name+'/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:18,maxNativeZoom:16,attribution:'Esri, HERE, © OpenStreetMap'});
+}
+var STYLES={
+  dark :{label:'Oscuro', base:function(){return esriLayer('World_Dark_Gray_Base');},
+         ref:function(){return esriLayer('World_Dark_Gray_Reference');}, filter:'', bg:'#262629'},
+  light:{label:'Claro',  base:function(){return esriLayer('World_Light_Gray_Base');},
+         ref:function(){return esriLayer('World_Light_Gray_Reference');}, filter:'', bg:'#D8D8D6'},
+  osm  :{label:'Detallado',
+         base:function(){return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+           {maxZoom:19,attribution:'© OpenStreetMap'});},
+         ref:null, filter:'invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.35)',
+         bg:'#1A1A1D'}
+};
+var styleKey='dark';
+try{var sv=localStorage.getItem('oad_style'); if(sv&&STYLES[sv]) styleKey=sv;}catch(e){}
+
+var baseL=null, refL=null, probeOk=0, probeBad=0, fellBack=false;
+function applyStyle(k,remember){
+  var S=STYLES[k]; if(!S) return;
+  styleKey=k;
+  if(remember){try{localStorage.setItem('oad_style',k);}catch(e){}}
+  if(baseL) map.removeLayer(baseL);
+  if(refL){map.removeLayer(refL); refL=null;}
+  document.querySelector('.leaflet-tile-pane').style.filter=S.filter;
+  document.getElementById('map').style.background=S.bg;
+  probeOk=0; probeBad=0;
+  baseL=S.base();
+  baseL.on('tileload',function(){probeOk++;});
+  baseL.on('tileerror',function(){
+    probeBad++;
+    /* si el servidor no responde a las primeras, nos pasamos a OSM antes de
+       dejarle la pantalla en blanco */
+    if(!fellBack && k!=='osm' && probeOk===0 && probeBad>=5){fellBack=true;applyStyle('osm',false);}
+  });
+  baseL.addTo(map);
+  if(S.ref){refL=S.ref(); refL.addTo(map);}
+  var box=document.getElementById('styleRow');
+  if(box){var bs=box.querySelectorAll('button');
+    for(var i=0;i<bs.length;i++) bs[i].setAttribute('aria-pressed',bs[i].dataset.m===k);}
+}
 
 /* capa de marcadores sobre canvas: 300+ puntos sin castigar el movil */
 /* tolerance ensancha SOLO la zona sensible al dedo, no el dibujo:
@@ -396,11 +443,11 @@ var canvas=L.canvas({padding:.4,tolerance:14});
 var layer=L.layerGroup().addTo(map);
 var MK={}, nearSet={};
 
-var C_PEND='#C8912F', C_VIS='#3C8F4A', C_NEAR='#3B7DD8';
+var C_PEND='#D9A441', C_VIS='#45A357', C_NEAR='#4A8FE7';
 function tone(r){return r.been?C_VIS:(nearSet[r.id]?C_NEAR:C_PEND);}
 function paint(r){
   var m=MK[r.id]; if(!m) return;
-  m.setStyle({fillColor:tone(r)});
+  m.setStyle(skin(r));
 }
 /* El punto crece con el zoom: pequeño en vista de España para no emborronar,
    grande de cerca, que es cuando lo vas a tocar. */
@@ -414,10 +461,15 @@ function resize(){
 }
 map.on('zoomend',resize);
 
+/* Nucleo solido con un halo del mismo color: el halo es en realidad un borde
+   grueso y translucido, asi que sigue siendo UN solo trazo por restaurante. */
+function skin(r){
+  var c=tone(r);
+  return {color:c,opacity:.20,weight:8,fillColor:c,fillOpacity:1};
+}
 function build(r){
-  /* anillo blanco: legible sobre el mapa claro y sin emborronarse al juntarse */
-  var m=L.circleMarker([r.la,r.lo],{renderer:canvas,radius:curSize||sizeAt(map.getZoom()),
-    weight:2,color:'#FFFFFF',opacity:.95,fillColor:tone(r),fillOpacity:1,bubblingMouseEvents:false});
+  var m=L.circleMarker([r.la,r.lo],L.extend({renderer:canvas,
+    radius:curSize||sizeAt(map.getZoom()),bubblingMouseEvents:false},skin(r)));
   m.on('click',function(){open(r.id);});
   MK[r.id]=m; return m;
 }
@@ -775,6 +827,11 @@ document.getElementById('btnAdd').onclick=function(){
 };
 function val(id){return document.getElementById(id).value.trim();}
 
+document.getElementById('styleRow').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-m]'); if(!b) return;
+  fellBack=false; applyStyle(b.dataset.m,true);
+});
+
 /* La barra inferior cambia de alto segun el notch: la medimos en vez de suponerla,
    asi la hoja encaja justo encima sin dejar ver una franja de mapa. */
 function syncNav(){
@@ -783,6 +840,7 @@ function syncNav(){
 }
 
 /* ════════ arranque ════════ */
+applyStyle(styleKey,false);
 syncNav();
 refresh();
 if(isDesk()) go('lista');
